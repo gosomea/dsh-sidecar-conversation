@@ -1,0 +1,3 @@
+- insert:
+    - id: sidecar-conversation
+      name: dsh-sidecar-conversation

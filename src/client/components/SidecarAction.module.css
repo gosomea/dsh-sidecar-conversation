@@ -1,0 +1,18 @@
+.turnAction {
+  /* Slot entries are emitted between Harness' built-in copy and branch
+   * controls. Registration order 20 places this after feedback (order 10),
+   * while leaving the native branch control immediately to its right. */
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: 0;
+  border-radius: 28px;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.turnAction:hover { color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover); }
