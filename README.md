@@ -1,7 +1,6 @@
 # dsh-sidecar-conversation
 
 [![CI](https://github.com/gosomea/dsh-sidecar-conversation/actions/workflows/ci.yml/badge.svg)](https://github.com/gosomea/dsh-sidecar-conversation/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/dsh-sidecar-conversation.svg)](https://www.npmjs.com/package/dsh-sidecar-conversation)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 
 为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 提供与主会话绑定的侧边对话。
