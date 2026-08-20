@@ -5,7 +5,8 @@
 - [ ] Better Sidebar Tab 重构完成手动验收
 - [x] 在包含通用 embedded Conversation Surface 的 Harness rc.8 源码构建中完成 Web 联调（2026-08-20 自动 smoke test；仍待用户回归）
 - [x] 发布 npm：`dsh-sidecar-conversation@0.1.0`（2026-08-20）
-- [ ] 创建 Git 标签和 GitHub Release
+- [x] 创建并推送 Git 标签 `v0.1.0`（2026-08-20）
+- [ ] 基于 `v0.1.0` 创建 GitHub Release
 - [x] 验证 npm 官方 registry 可公开读取版本和 tarball（2026-08-20）
 - [ ] 验证干净 DSH profile 的公开安装与完整交互
 
