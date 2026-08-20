@@ -4,11 +4,12 @@
 
 - [ ] Better Sidebar Tab 重构完成手动验收
 - [x] 在包含通用 embedded Conversation Surface 的 Harness rc.8 源码构建中完成 Web 联调（2026-08-20 自动 smoke test；仍待用户回归）
-- [ ] 发布 npm（当前明确暂不发布）
+- [x] 发布 npm：`dsh-sidecar-conversation@0.1.0`（2026-08-20）
 - [ ] 创建 Git 标签和 GitHub Release
-- [ ] 验证干净 profile 的公开安装
+- [x] 验证 npm 官方 registry 可公开读取版本和 tarball（2026-08-20）
+- [ ] 验证干净 DSH profile 的公开安装与完整交互
 
-在用户完成手动回归、确认源码 Harness 与 Better Sidebar 兼容之前，不执行 npm 发布、打标签或公开安装验证。当前主要安装方式是：先安装/升级 dsh-better-sidebar@^0.14.0，再用 link: 接入本地 dsh-sidecar-conversation。
+`0.1.0` 已发布到 npm。当前主要安装方式是：先安装/升级 `dsh-better-sidebar@^0.14.0`，再从 npm 安装 `dsh-sidecar-conversation`。完整功能仍需使用包含 embedded Conversation Surface 的兼容 Harness 源码构建。
 
 ## 用户验收
 
@@ -44,7 +45,7 @@
     pnpm run build:web
     pnpm dsh web
 
-## npm 发布（用户验收后再执行）
+## npm 发布（已完成）
 
 登录和发布必须显式使用 npm 官方 registry：
 
@@ -53,7 +54,7 @@
     npm publish --access public --registry=https://registry.npmjs.org/
     npm view dsh-sidecar-conversation version --registry=https://registry.npmjs.org/
 
-验证结果应为 0.1.0。如果包名或验收结论有变化，先更新 README、兼容性说明和本清单，不要绕过检查直接发布。
+验证结果为 `0.1.0`。后续版本仍需先更新 README、兼容性说明和本清单，再执行发布。
 
 ## 标签与 Release（npm 发布成功后再执行）
 
