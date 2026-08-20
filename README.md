@@ -2,17 +2,16 @@
 
 面向 DeepSeek Harness Web 的会话绑定侧边对话插件。侧问作为 dsh-better-sidebar 的第三方 Tab 在右侧并列显示，主对话保持不变，并复用 Harness 原生 Conversation Surface 的消息、工具调用、审批和输入组件。
 
-> 当前是本地联调版本，暂不发布 npm。重构依赖 Harness rc.8 即将合入的通用 embedded Conversation Surface；请使用对应的源码构建版本，不要把当前代码当作已发布的 npm 版本安装。
+> 兼容性提示：0.1.0 需要包含 detached Session 与 embedded Conversation Surface 扩展的 Harness 源码构建。当前官方 npm 版 Harness 尚未提供这两个运行时接口；未打补丁的官方 Web 可以安装插件，但打开 Sidecar 时会显示兼容性错误。
 
 ## 快速使用
 
-需要 Node.js 22+、源码构建的 Harness Web，以及 dsh-better-sidebar 0.14+。
+需要 Node.js 22+、兼容的 Harness Web 源码构建，以及 dsh-better-sidebar 0.14+。
 
-    cd /path/to/dsh-sidecar-conversation
-    pnpm install
     dsh plugin --profile web add dsh-better-sidebar@^0.14.0
-    dsh plugin --profile web add link:$(pwd)
+    dsh plugin --profile web add dsh-sidecar-conversation
     dsh --profile web --dump-config
+    dsh web
 
 源码 Harness 联调：
 
@@ -45,7 +44,7 @@
     pnpm build
     pnpm pack --dry-run
 
-本仓库是独立 workspace，不依赖外层 Harness checkout 的 TypeScript paths、workspace extends 或 link: 依赖。开发时只通过 dsh plugin --profile web add link:$(pwd) 接入 Profile；不要手改 profiles/web/cordis.patch.yml。
+本仓库是独立 workspace，不依赖外层 Harness checkout 的 TypeScript paths、workspace extends 或 link: 依赖。开发时通过 `dsh plugin --profile web add link:$(pwd)` 接入 Profile；不要手改 profiles/web/cordis.patch.yml。
 
 更多设计说明见[架构](./docs/architecture.md)、[兼容性](./docs/compatibility.md)、[开发](./docs/development.md)和[发布前 TODO](./docs/release-todo.md)。
 

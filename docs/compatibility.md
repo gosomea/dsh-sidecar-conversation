@@ -7,7 +7,7 @@
 - DeepSeek Harness Web，基于 rc.8 的源码构建
 - dsh-better-sidebar ^0.14.0
 
-本次重构依赖 Harness rc.8 即将合入的通用 detached Session / embedded Conversation Surface。它还不是当前 Sidecar 可独立依赖的已发布 npm API；如果你的源码构建尚未包含该 Surface，右侧 Tab 会显示兼容性错误，插件不会退回到旧 drawer 或自定义 transcript。请先更新 Harness 对应源码分支并重新构建 host/client，再进行 Web 联调。
+本次重构依赖通用 detached Session / embedded Conversation Surface。它还不是当前官方 Harness npm 包提供的运行时 API；如果你的源码构建尚未包含该 Surface，右侧 Tab 会显示兼容性错误，插件不会退回到旧 drawer 或自定义 transcript。请先应用对应的 Harness 源码扩展并重新构建 host/client。
 
 Sidecar 本身保持独立 workspace，使用公开的 @deepseek-ai/* 类型/构建依赖，不使用外层 Harness checkout 的 TypeScript paths、workspace extends 或 link: 依赖。运行时仍需使用与当前 Web profile 相容的 Harness 版本。
 
@@ -27,4 +27,4 @@ Better Sidebar 负责右侧面板、分栏、Tab 状态和会话定向打开；S
 - 只读模式约束工作区文件系统，不等同于网络隔离，也不能替第三方 MCP 判断副作用。
 - Sidecar 与父会话记录隔离，但共享工作区；继承权限下的工具可并发修改同一文件。
 - 访问模式创建后不可切换；关闭 Tab 不会归档或停止 child，归档需要显式操作。
-- 当前未发布 npm。不要使用 dsh plugin add dsh-sidecar-conversation 的公开安装方式；请使用本文档的本地 link: 联调流程。
+- npm 包只保证在包含上述源码扩展的 Harness 构建上工作；未打补丁的官方 Harness 暂不属于 0.1.0 的运行时兼容范围。
