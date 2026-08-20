@@ -1,60 +1,71 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SidecarClientStore } from '../src/client/store.js'
+import { SIDECAR_UI_STORAGE_KEY, type SidecarRecord } from '../src/core/types.js'
 
-describe('parent-scoped UI state', () => {
+function record(parentSessionId: string, childSessionId: string, status: SidecarRecord['status'] = 'active'): SidecarRecord {
+  return {
+    parentSessionId,
+    childSessionId,
+    requestKey: `request-${childSessionId}`,
+    sourceMessageId: 'message',
+    sourceSeq: 1,
+    sourceKind: 'turn',
+    quote: '',
+    firstQuestion: 'question',
+    firstPromptRpcId: `rpc-${childSessionId}`,
+    access: { mode: 'read-only' },
+    title: childSessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    status,
+  }
+}
+
+describe('SidecarClientStore', () => {
   beforeEach(() => { localStorage.clear() })
 
-  it('isolates drafts, active tabs, open state and width by parent', () => {
+  it('isolates registry records and loading state by parent Session', () => {
     const store = new SidecarClientStore()
-    store.openDraft('parent-a', { sourceKind: 'selection', sourceMessageId: 'm1', sourceSeq: 1, quote: 'a', question: '', accessMode: 'read-only' })
-    store.openDraft('parent-b', { sourceKind: 'turn', sourceMessageId: 'm2', sourceSeq: 2, quote: '', question: '', accessMode: 'inherit' })
-    store.updateDraftQuestion('parent-a', 'only a')
-    store.resize('parent-a', 600)
-    store.close('parent-b')
-    expect(store.parent('parent-a').draft?.question).toBe('only a')
-    expect(store.parent('parent-b').draft?.question).toBe('')
-    expect(store.parent('parent-a').width).toBe(600)
-    expect(store.parent('parent-b').open).toBe(false)
+    store.setLoading('parent-a')
+    store.setLoading('parent-b')
+    store.setRecords('parent-a', [record('parent-a', 'child-a')])
+
+    expect(store.records('parent-a').map(item => item.childSessionId)).toEqual(['child-a'])
+    expect(store.records('parent-b')).toEqual([])
+    expect(store.getSnapshot().loadingParents).toEqual({ 'parent-a': false, 'parent-b': true })
   })
 
-  it('restores state from the versioned browser key', () => {
-    const first = new SidecarClientStore()
-    first.openDraft('parent-a', { sourceKind: 'selection', sourceMessageId: 'm1', sourceSeq: 1, quote: 'a', question: 'draft', accessMode: 'read-only' })
-    const restored = new SidecarClientStore()
-    expect(restored.parent('parent-a').draft?.question).toBe('draft')
+  it('clears loading atomically and keeps a retryable load error', () => {
+    const store = new SidecarClientStore()
+    store.setLoading('parent')
+    store.setLoadError('parent', new Error('暂时无法连接'))
+
+    expect(store.getSnapshot().loadingParents.parent).toBe(false)
+    expect(store.getSnapshot().error).toBe('暂时无法连接')
   })
 
-  it('removes only the selected quote while preserving the question draft', () => {
+  it('infers the source kind for legacy records without sourceKind', () => {
     const store = new SidecarClientStore()
-    store.openDraft('parent-a', {
-      sourceKind: 'selection', sourceMessageId: 'm1', sourceSeq: 1, quote: 'selected', question: 'why?', accessMode: 'read-only',
-    })
+    store.setRecords('parent', [
+      { ...record('parent', 'turn-child'), sourceKind: undefined, quote: '' },
+      { ...record('parent', 'selection-child'), sourceKind: undefined, quote: 'selected text' },
+    ])
 
-    store.useWholeTurnDraft('parent-a')
-
-    expect(store.parent('parent-a').draft).toEqual({
-      sourceKind: 'turn', sourceMessageId: 'm1', sourceSeq: 1, quote: '', question: 'why?', accessMode: 'read-only', forceNew: true,
-    })
-    expect(store.parent('parent-a').open).toBe(true)
+    expect(store.records('parent').map(item => item.sourceKind)).toEqual(['turn', 'selection'])
   })
 
-  it('persists the explicit new-Sidecar choice with the parent draft', () => {
-    const store = new SidecarClientStore()
-    store.openDraft('parent-a', { sourceKind: 'turn', sourceMessageId: 'm1', sourceSeq: 1, quote: '', question: 'why?', accessMode: 'read-only' })
-    store.setDraftForceNew('parent-a', true)
-    expect(store.parent('parent-a').draft?.forceNew).toBe(true)
-    expect(new SidecarClientStore().parent('parent-a').draft?.forceNew).toBe(true)
-  })
+  it('does not rewrite the legacy drawer document', () => {
+    localStorage.setItem(SIDECAR_UI_STORAGE_KEY, JSON.stringify({ byParent: { parent: { open: true, width: 620 } } }))
+    const before = localStorage.getItem(SIDECAR_UI_STORAGE_KEY)
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
 
-  it('starts parent-originated drafts as a new Sidecar and permits explicit reuse', () => {
     const store = new SidecarClientStore()
-    store.openDraft('parent-a', {
-      sourceKind: 'turn', sourceMessageId: 'm1', sourceSeq: 1, quote: '', question: '', accessMode: 'read-only',
-    })
-    expect(store.parent('parent-a').draft?.forceNew).toBe(true)
-    store.setDraftForceNew('parent-a', false)
-    expect(store.parent('parent-a').draft?.forceNew).toBe(false)
+    store.setRecords('parent', [record('parent', 'child')])
+
+    expect(localStorage.getItem(SIDECAR_UI_STORAGE_KEY)).toBe(before)
+    expect(setItem).not.toHaveBeenCalled()
+    setItem.mockRestore()
   })
 
   it('shows a prompt optimistically and removes it when its RPC event arrives', () => {
@@ -73,15 +84,15 @@ describe('parent-scoped UI state', () => {
     expect(store.getSnapshot().optimisticByChild.child?.[0]).toMatchObject({ state: 'failed', error: 'network down' })
   })
 
-  it('opens a selected historical Sidecar instead of leaving the draft over it', () => {
+  it('notifies subscribers and clears a stale error after a successful list refresh', () => {
     const store = new SidecarClientStore()
-    store.openDraft('parent-a', {
-      sourceKind: 'selection', sourceMessageId: 'm1', sourceSeq: 1, quote: 'selected', question: 'draft', accessMode: 'read-only',
-    })
-    store.select('parent-a', 'child-history')
-    expect(store.parent('parent-a')).toMatchObject({
-      activeChildSessionId: 'child-history', open: true,
-    })
-    expect(store.parent('parent-a').draft).toBeUndefined()
+    const listener = vi.fn()
+    const dispose = store.subscribe(listener)
+    store.setError(new Error('offline'))
+    store.setRecords('parent', [record('parent', 'child')])
+
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(store.getSnapshot().error).toBeUndefined()
+    dispose()
   })
 })

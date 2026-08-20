@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { markdownVisibleText, normalizeQuote, quoteTitle, textContainsQuote, unwrapSidecarQuestion, wrapContextQuestion, wrapFirstQuestion, wrapSidecarQuestion } from '../src/core/quote.js'
-import { hasPromptRpcId, mergeEvents, transcriptFromEvents } from '../src/core/transcript.js'
+import { assistantMessage, hasPromptRpcId, mergeEvents } from '../src/core/transcript.js'
 import type { HistoryEvent } from '../src/core/types.js'
 
 describe('quote contract', () => {
@@ -47,7 +47,7 @@ describe('quote contract', () => {
   })
 })
 
-describe('history/SSE merge', () => {
+describe('history merge', () => {
   const user: HistoryEvent = { type: 'user/message', seq: 4, data: { message: { source: { rpcId: 'r1' }, content: [{ type: 'text', text: 'question' }] } } }
   const assistant: HistoryEvent = { type: 'assistant/message', seq: 8, data: { message: { id: 'm1', content: [{ type: 'reasoning', text: 'think' }, { type: 'text', text: 'answer' }] } } }
 
@@ -55,19 +55,16 @@ describe('history/SSE merge', () => {
     expect(mergeEvents([assistant], [user, { ...assistant }]).map(event => event.seq)).toEqual([4, 8])
   })
 
-  it('starts rendering at firstPromptRpcId and preserves folded blocks', () => {
+  it('finds the first prompt boundary used by the native surface', () => {
     expect(hasPromptRpcId([user], 'r1')).toBe(true)
-    const items = transcriptFromEvents([{ type: 'session/title', seq: 1 }, user, assistant], 'r1')
-    expect(items.map(item => item.kind)).toEqual(['user', 'reasoning', 'assistant'])
+    expect(hasPromptRpcId([{ type: 'session/title', seq: 1 }, assistant], 'r1')).toBe(false)
   })
 
-  it('renders wrapped prompt text as the actual question with source metadata', () => {
-    const wrapped: HistoryEvent = {
-      type: 'user/message', seq: 10,
-      data: { message: { source: { rpcId: 'r2' }, content: [{ type: 'text', text: wrapContextQuestion('quote', 'actual question', 'selection') }] } },
-    }
-    expect(transcriptFromEvents([wrapped])[0]).toMatchObject({
-      kind: 'user', text: 'actual question', sourceKind: 'selection', quote: 'quote', rpcId: 'r2',
-    })
+  it('decodes malformed cyclic message content without overflowing the call stack', () => {
+    const cyclic: { content?: unknown } = {}
+    cyclic.content = cyclic
+    expect(assistantMessage({
+      type: 'assistant/message', seq: 9, data: { message: { id: 'cyclic', content: cyclic } },
+    })).toEqual({ messageId: 'cyclic', text: '' })
   })
 })

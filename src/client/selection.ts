@@ -1,5 +1,5 @@
 import type { ConversationSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
-import { normalizeQuote } from '../core/quote.js'
+import { normalizeQuote, textContainsQuote } from '../core/quote.js'
 
 interface AssistantData {
   finalNode?: { messageId?: string; seq: number; blocks: readonly { kind: string; text?: string }[] }
@@ -12,6 +12,15 @@ export interface AssistantCandidate {
   marker?: HTMLElement
 }
 
+function sourceFromFinal(final: NonNullable<AssistantData['finalNode']>): { messageId: string; sourceSeq: number; text: string } | undefined {
+  if (final.messageId === undefined) return undefined
+  return {
+    messageId: final.messageId,
+    sourceSeq: final.seq,
+    text: final.blocks.filter(block => block.kind === 'text').map(block => block.text ?? '').join('\n'),
+  }
+}
+
 export function findAssistantSource(snapshot: ConversationSnapshot, messageId: string): { sourceSeq: number; text: string } | undefined {
   for (const node of snapshot.chat.nodes.values()) {
     const data = (node as unknown as { kind?: string; data?: AssistantData }).data
@@ -20,6 +29,15 @@ export function findAssistantSource(snapshot: ConversationSnapshot, messageId: s
     return { sourceSeq: final.seq, text: final.blocks.filter(block => block.kind === 'text').map(block => block.text ?? '').join('\n') }
   }
   return undefined
+}
+
+/** Resolve the exact finalized Assistant node owning one rendered chat row. */
+export function assistantSourceForRow(snapshot: ConversationSnapshot, sourceRow: HTMLElement): AssistantCandidate | undefined {
+  const nodeKey = sourceRow.dataset.chatFlowKey
+  if (nodeKey === undefined) return undefined
+  const node = snapshot.chat.nodes.get(nodeKey)
+  const final = (node as unknown as { data?: AssistantData } | undefined)?.data?.finalNode
+  return final === undefined ? undefined : sourceFromFinal(final)
 }
 
 export function findAssistantAtSeq(snapshot: ConversationSnapshot, sourceSeq: number): { messageId: string; sourceSeq: number; text: string } | undefined {
@@ -42,6 +60,9 @@ export function assistantSelectionRow(selection: Selection): HTMLElement | undef
   const end = range.endContainer.nodeType === Node.ELEMENT_NODE ? range.endContainer as Element : range.endContainer.parentElement
   const row = start?.closest<HTMLElement>('[data-chat-flow-kind="assistant"], [data-chat-flow-kind="assistant-step"]')
   if (row === null || row === undefined || !row.contains(end)) return undefined
+  // Sidecars are bound to the currently selected main Session. Do not offer
+  // a nested Sidecar action for text rendered by an embedded child Surface.
+  if (row.closest('[data-sidecar-native-surface]') !== null) return undefined
   return row
 }
 
@@ -50,7 +71,7 @@ export function closestCandidate(candidates: readonly AssistantCandidate[], quot
   if (!sourceRow.innerText.replace(/\s+/g, ' ').includes(normalized)) return undefined
   const rowRect = sourceRow.getBoundingClientRect()
   return candidates
-    .filter(candidate => candidate.marker !== undefined)
+    .filter(candidate => candidate.marker !== undefined && textContainsQuote(candidate.text, quote))
     .sort((a, b) => {
       const aTop = a.marker?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY
       const bTop = b.marker?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY
@@ -64,7 +85,7 @@ export function selectedQuoteForMessage(snapshot: ConversationSnapshot, messageI
   const source = findAssistantSource(snapshot, messageId)
   if (source === undefined) throw new Error('找不到这条已完成的 Assistant 消息')
   const quote = normalizeQuote(selectedText)
-  if (!source.text.replace(/\s+/g, ' ').includes(quote.replace(/\s+/g, ' '))) {
+  if (!textContainsQuote(source.text, quote)) {
     throw new Error('选中的文字必须来自这条 Assistant 消息')
   }
   return { sourceSeq: source.sourceSeq, quote }

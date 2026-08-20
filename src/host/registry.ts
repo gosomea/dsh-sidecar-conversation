@@ -1,43 +1,88 @@
-import { chmod, mkdir, open, readFile, rename } from 'node:fs/promises'
+import { chmod, mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { SIDECAR_REGISTRY_VERSION, type SidecarRecord } from '../core/types.js'
 
-interface RegistryFile {
+export interface RegistryFile {
   version: typeof SIDECAR_REGISTRY_VERSION
   records: SidecarRecord[]
+  promptReceipts: PromptReceipt[]
 }
+
+export interface PromptReceipt {
+  childSessionId: string
+  rpcId: string
+  textHash: string
+  status: 'pending' | 'accepted'
+  createdAt: number
+  updatedAt: number
+}
+
+export type RegistryPersistence = (filename: string, snapshot: RegistryFile) => Promise<void>
 
 interface LegacyRegistryFile {
   version: 1
   records: Omit<SidecarRecord, 'access'>[]
 }
 
+interface RegistryFileV2 {
+  version: 2
+  records: SidecarRecord[]
+}
+
 interface ParsedRegistryFile {
   version?: unknown
-  records?: unknown[]
+  records?: unknown
+  promptReceipts?: unknown
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function isReasonableTimestamp(value: unknown): value is number {
+  // Registry timestamps are Date.now()-style millisecond values. Keeping them
+  // as non-negative safe integers rejects NaN/Infinity and absurd values while
+  // remaining compatible with old fixtures and migrated registries.
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value >= 0
+}
+
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+function isAccessSnapshot(value: unknown): value is SidecarRecord['access'] {
+  if (!isObject(value)) return false
+  const item = value as Partial<SidecarRecord['access']>
+  return (item.mode === 'read-only' || item.mode === 'inherit')
+    && (item.effectiveSandbox === undefined || item.effectiveSandbox === 'read-only' || item.effectiveSandbox === 'workspace-write' || item.effectiveSandbox === 'danger-full-access')
+    && (item.effectiveApproval === undefined || item.effectiveApproval === 'ask' || item.effectiveApproval === 'never')
 }
 
 function isRecord(value: unknown): value is SidecarRecord {
-  if (typeof value !== 'object' || value === null) return false
+  if (!isObject(value)) return false
   const item = value as Partial<SidecarRecord>
-  return typeof item.parentSessionId === 'string'
-    && typeof item.childSessionId === 'string'
-    && typeof item.requestKey === 'string'
-    && typeof item.sourceMessageId === 'string'
-    && Number.isInteger(item.sourceSeq)
+  return isNonEmptyString(item.parentSessionId)
+    && isNonEmptyString(item.childSessionId)
+    && isNonEmptyString(item.requestKey)
+    && isNonEmptyString(item.sourceMessageId)
+    && isNonNegativeSafeInteger(item.sourceSeq)
     && (item.sourceKind === undefined || item.sourceKind === 'selection' || item.sourceKind === 'turn')
     && typeof item.quote === 'string'
-    && typeof item.firstQuestion === 'string'
-    && typeof item.firstPromptRpcId === 'string'
-    && typeof item.access === 'object' && item.access !== null
-    && (item.access.mode === 'read-only' || item.access.mode === 'inherit')
-    && (item.access.effectiveSandbox === undefined || item.access.effectiveSandbox === 'read-only' || item.access.effectiveSandbox === 'workspace-write' || item.access.effectiveSandbox === 'danger-full-access')
-    && (item.access.effectiveApproval === undefined || item.access.effectiveApproval === 'ask' || item.access.effectiveApproval === 'never')
-    && typeof item.title === 'string'
-    && typeof item.createdAt === 'number'
-    && typeof item.updatedAt === 'number'
+    && isNonEmptyString(item.firstQuestion)
+    && isNonEmptyString(item.firstPromptRpcId)
+    && isAccessSnapshot(item.access)
+    && isNonEmptyString(item.title)
+    && isReasonableTimestamp(item.createdAt)
+    && isReasonableTimestamp(item.updatedAt)
+    && item.createdAt <= item.updatedAt
     && (item.status === 'provisioning' || item.status === 'active' || item.status === 'archived')
 }
 
@@ -46,37 +91,102 @@ function isLegacyRecord(value: unknown): value is LegacyRegistryFile['records'][
   return isRecord({ ...value, access: { mode: 'inherit' } })
 }
 
+function isPromptReceipt(value: unknown): value is PromptReceipt {
+  if (!isObject(value)) return false
+  const item = value as Partial<PromptReceipt>
+  return isNonEmptyString(item.childSessionId)
+    && isNonEmptyString(item.rpcId)
+    && typeof item.textHash === 'string'
+    && /^[a-f0-9]{64}$/.test(item.textHash)
+    && (item.status === 'pending' || item.status === 'accepted')
+    && isReasonableTimestamp(item.createdAt)
+    && isReasonableTimestamp(item.updatedAt)
+    && item.createdAt <= item.updatedAt
+}
+
+function cloneRecord(record: SidecarRecord): SidecarRecord {
+  return { ...record, access: { ...record.access } }
+}
+
+function cloneRecords(records: readonly SidecarRecord[]): SidecarRecord[] {
+  return records.map(cloneRecord)
+}
+
+function cloneReceipt(receipt: PromptReceipt): PromptReceipt { return { ...receipt } }
+function cloneReceipts(receipts: readonly PromptReceipt[]): PromptReceipt[] { return receipts.map(cloneReceipt) }
+
+const persistAtomic: RegistryPersistence = async (filename, snapshot) => {
+  await mkdir(dirname(filename), { recursive: true })
+  const temp = `${filename}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    const handle = await open(temp, 'wx', 0o600)
+    try {
+      await handle.writeFile(`${JSON.stringify(snapshot, null, 2)}\n`, 'utf8')
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
+    await rename(temp, filename)
+    await chmod(filename, 0o600)
+    const directory = await open(dirname(filename), 'r')
+    try { await directory.sync() } finally { await directory.close() }
+  } catch (error: unknown) {
+    await rm(temp, { force: true }).catch(() => undefined)
+    throw error
+  }
+}
+
 export class SidecarRegistry {
   readonly filename: string
   private records: SidecarRecord[] = []
-  private writeChain: Promise<void> = Promise.resolve()
+  private promptReceipts: PromptReceipt[] = []
+  private mutationChain: Promise<void> = Promise.resolve()
   private corruptError: Error | undefined
 
-  constructor(filename = join(resolveDshHome(), 'sidecar-conversation.json')) {
+  constructor(
+    filename = join(resolveDshHome(), 'sidecar-conversation.json'),
+    private readonly persistence: RegistryPersistence = persistAtomic,
+  ) {
     this.filename = filename
   }
 
   async load(): Promise<void> {
-    let parsed: ParsedRegistryFile
+    let parsed: unknown
     try {
       const text = await readFile(this.filename, 'utf8')
-      parsed = JSON.parse(text) as ParsedRegistryFile
+      parsed = JSON.parse(text) as unknown
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
       this.corruptError = new Error(`sidecar registry is read-only because ${this.filename} is invalid: ${String(error)}`)
       return
     }
-    if (parsed.version === 1 && Array.isArray(parsed.records) && parsed.records.every(isLegacyRecord)) {
-      this.records = parsed.records.map(item => ({ ...item, access: { mode: 'inherit' } }))
-      try { await this.persist() }
-      catch (error: unknown) { this.corruptError = new Error(`sidecar registry migration could not be persisted: ${String(error)}`) }
-      return
-    }
-    if (parsed.version !== SIDECAR_REGISTRY_VERSION || !Array.isArray(parsed.records) || !parsed.records.every(isRecord)) {
+    if (!isObject(parsed)) {
       this.corruptError = new Error(`sidecar registry is read-only because ${this.filename} is invalid: unsupported or malformed registry shape`)
       return
     }
-    this.records = parsed.records.map(item => ({ ...item, access: { ...item.access } }))
+    const candidate = parsed as ParsedRegistryFile
+    if (candidate.version === 1 && Array.isArray(candidate.records) && candidate.records.every(isLegacyRecord)) {
+      this.records = candidate.records.map(item => ({ ...item, access: { mode: 'inherit' } }))
+      try { await this.persistSnapshot(this.records, []) }
+      catch (error: unknown) { this.corruptError = new Error(`sidecar registry migration could not be persisted: ${String(error)}`) }
+      return
+    }
+    if (candidate.version === 2 && Array.isArray(candidate.records) && candidate.records.every(isRecord)) {
+      this.records = cloneRecords(candidate.records as RegistryFileV2['records'])
+      try { await this.persistSnapshot(this.records, []) }
+      catch (error: unknown) { this.corruptError = new Error(`sidecar registry migration could not be persisted: ${String(error)}`) }
+      return
+    }
+    if (candidate.version !== SIDECAR_REGISTRY_VERSION
+      || !Array.isArray(candidate.records)
+      || !candidate.records.every(isRecord)
+      || !Array.isArray(candidate.promptReceipts)
+      || !candidate.promptReceipts.every(isPromptReceipt)) {
+      this.corruptError = new Error(`sidecar registry is read-only because ${this.filename} is invalid: unsupported or malformed registry shape`)
+      return
+    }
+    this.records = cloneRecords(candidate.records)
+    this.promptReceipts = cloneReceipts(candidate.promptReceipts)
   }
 
   list(parentSessionId: string, includeArchived = false): SidecarRecord[] {
@@ -84,76 +194,116 @@ export class SidecarRegistry {
       .filter(item => item.parentSessionId === parentSessionId
         && (item.status === 'active' || (includeArchived && item.status === 'archived')))
       .sort((a, b) => b.updatedAt - a.updatedAt)
-      .map(item => ({ ...item, access: { ...item.access } }))
+      .map(cloneRecord)
   }
 
-  all(): SidecarRecord[] { return this.records.map(item => ({ ...item, access: { ...item.access } })) }
+  all(): SidecarRecord[] { return cloneRecords(this.records) }
 
   getByChild(childSessionId: string): SidecarRecord | undefined {
     const found = this.records.find(item => item.childSessionId === childSessionId)
-    return found === undefined ? undefined : { ...found, access: { ...found.access } }
+    return found === undefined ? undefined : cloneRecord(found)
   }
 
   getByRequest(parentSessionId: string, requestKey: string): SidecarRecord | undefined {
     const found = this.records.find(item => item.parentSessionId === parentSessionId && item.requestKey === requestKey)
-    return found === undefined ? undefined : { ...found, access: { ...found.access } }
+    return found === undefined ? undefined : cloneRecord(found)
+  }
+
+  getPromptReceipt(childSessionId: string, rpcId: string): PromptReceipt | undefined {
+    const found = this.promptReceipts.find(item => item.childSessionId === childSessionId && item.rpcId === rpcId)
+    return found === undefined ? undefined : cloneReceipt(found)
   }
 
   async add(record: SidecarRecord): Promise<SidecarRecord> {
-    this.ensureWritable()
-    if (this.getByChild(record.childSessionId) !== undefined) throw new Error('child Session is already registered')
-    if (this.getByRequest(record.parentSessionId, record.requestKey) !== undefined) throw new Error('requestKey is already registered')
-    this.records.push({ ...record, access: { ...record.access } })
-    try { await this.persist() } catch (error: unknown) { this.records.pop(); throw error }
-    return { ...record, access: { ...record.access } }
+    return this.mutate((records) => {
+      if (!isRecord(record)) throw new Error('invalid Sidecar record')
+      if (records.some(item => item.childSessionId === record.childSessionId)) throw new Error('child Session is already registered')
+      if (records.some(item => item.parentSessionId === record.parentSessionId && item.requestKey === record.requestKey)) {
+        throw new Error('requestKey is already registered')
+      }
+      const next = cloneRecord(record)
+      records.push(next)
+      return cloneRecord(next)
+    })
   }
 
   async setArchived(childSessionId: string, archived: boolean): Promise<SidecarRecord> {
-    this.ensureWritable()
-    const index = this.records.findIndex(item => item.childSessionId === childSessionId)
-    const current = this.records[index]
-    if (index < 0 || current === undefined) throw new Error('Sidecar is not registered')
-    if (current.status === 'provisioning') throw new Error('Sidecar is still being provisioned')
-    const next: SidecarRecord = { ...current, status: archived ? 'archived' : 'active', updatedAt: Date.now() }
-    this.records[index] = next
-    try { await this.persist() } catch (error: unknown) { this.records[index] = current; throw error }
-    return { ...next, access: { ...next.access } }
+    return this.mutate((records) => {
+      const index = records.findIndex(item => item.childSessionId === childSessionId)
+      const current = records[index]
+      if (index < 0 || current === undefined) throw new Error('Sidecar is not registered')
+      if (current.status === 'provisioning') throw new Error('Sidecar is still being provisioned')
+      const next: SidecarRecord = { ...current, status: archived ? 'archived' : 'active', updatedAt: Date.now() }
+      records[index] = next
+      return cloneRecord(next)
+    })
   }
 
   async activate(childSessionId: string, access: SidecarRecord['access']): Promise<SidecarRecord> {
-    this.ensureWritable()
-    const index = this.records.findIndex(item => item.childSessionId === childSessionId)
-    const current = this.records[index]
-    if (index < 0 || current === undefined) throw new Error('Sidecar is not registered')
-    const next: SidecarRecord = { ...current, access: { ...access }, status: 'active', updatedAt: Date.now() }
-    this.records[index] = next
-    try { await this.persist() } catch (error: unknown) { this.records[index] = current; throw error }
-    return { ...next, access: { ...next.access } }
+    return this.mutate((records) => {
+      const index = records.findIndex(item => item.childSessionId === childSessionId)
+      const current = records[index]
+      if (index < 0 || current === undefined) throw new Error('Sidecar is not registered')
+      const next: SidecarRecord = { ...current, access: { ...access }, status: 'active', updatedAt: Date.now() }
+      records[index] = next
+      return cloneRecord(next)
+    })
   }
 
-  private async persist(): Promise<void> {
-    if (this.corruptError !== undefined) throw this.corruptError
-    const snapshot: RegistryFile = {
-      version: SIDECAR_REGISTRY_VERSION,
-      records: this.records.map(item => ({ ...item, access: { ...item.access } })),
-    }
-    const task = this.writeChain.then(async () => {
-      await mkdir(dirname(this.filename), { recursive: true })
-      const temp = `${this.filename}.${process.pid}.${randomUUID()}.tmp`
-      const handle = await open(temp, 'wx', 0o600)
-      try {
-        await handle.writeFile(`${JSON.stringify(snapshot, null, 2)}\n`, 'utf8')
-        await handle.sync()
-      } finally {
-        await handle.close()
+  async reservePrompt(childSessionId: string, rpcId: string, textHash: string): Promise<{ created: boolean; receipt: PromptReceipt }> {
+    return this.mutate((records, receipts) => {
+      if (!records.some(item => item.childSessionId === childSessionId)) throw new Error('Sidecar is not registered')
+      const existing = receipts.find(item => item.childSessionId === childSessionId && item.rpcId === rpcId)
+      if (existing !== undefined) {
+        if (existing.textHash !== textHash) throw new Error('requestKey is already bound to a different Sidecar prompt')
+        return { created: false, receipt: cloneReceipt(existing) }
       }
-      await rename(temp, this.filename)
-      await chmod(this.filename, 0o600)
-      const directory = await open(dirname(this.filename), 'r')
-      try { await directory.sync() } finally { await directory.close() }
+      const now = Date.now()
+      const receipt: PromptReceipt = {
+        childSessionId, rpcId, textHash, status: 'pending', createdAt: now, updatedAt: now,
+      }
+      receipts.push(receipt)
+      return { created: true, receipt: cloneReceipt(receipt) }
     })
-    this.writeChain = task.catch(() => undefined)
+  }
+
+  async acceptPrompt(childSessionId: string, rpcId: string, textHash: string): Promise<PromptReceipt> {
+    return this.mutate((_records, receipts) => {
+      const index = receipts.findIndex(item => item.childSessionId === childSessionId && item.rpcId === rpcId)
+      const current = receipts[index]
+      if (index < 0 || current === undefined) throw new Error('Sidecar prompt receipt is not reserved')
+      if (current.textHash !== textHash) throw new Error('requestKey is already bound to a different Sidecar prompt')
+      const next: PromptReceipt = { ...current, status: 'accepted', updatedAt: Date.now() }
+      receipts[index] = next
+      return cloneReceipt(next)
+    })
+  }
+
+  private async mutate<T>(change: (records: SidecarRecord[], receipts: PromptReceipt[]) => T): Promise<T> {
+    this.ensureWritable()
+    let result: T | undefined
+    const task = this.mutationChain.then(async () => {
+      this.ensureWritable()
+      const nextRecords = cloneRecords(this.records)
+      const nextReceipts = cloneReceipts(this.promptReceipts)
+      result = change(nextRecords, nextReceipts)
+      await this.persistSnapshot(nextRecords, nextReceipts)
+      this.records = nextRecords
+      this.promptReceipts = nextReceipts
+    })
+    this.mutationChain = task.catch(() => undefined)
     await task
+    if (result === undefined) throw new Error('registry mutation completed without a result')
+    return result
+  }
+
+  private async persistSnapshot(records: readonly SidecarRecord[], receipts: readonly PromptReceipt[]): Promise<void> {
+    if (this.corruptError !== undefined) throw this.corruptError
+    await this.persistence(this.filename, {
+      version: SIDECAR_REGISTRY_VERSION,
+      records: cloneRecords(records),
+      promptReceipts: cloneReceipts(receipts),
+    })
   }
 
   ensureWritable(): void {

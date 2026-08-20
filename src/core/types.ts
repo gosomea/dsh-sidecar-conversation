@@ -1,6 +1,6 @@
 export const SIDECAR_API_PREFIX = '/sidecar-conversation/v1'
 export const SIDECAR_UI_STORAGE_KEY = 'dsh.sidecar-conversation.ui.v1'
-export const SIDECAR_REGISTRY_VERSION = 2 as const
+export const SIDECAR_REGISTRY_VERSION = 3 as const
 export const MAX_QUOTE_LENGTH = 4_000
 export const MAX_QUESTION_LENGTH = 32_000
 
@@ -31,6 +31,7 @@ export interface SidecarRecord {
 }
 
 export interface SidecarDraft {
+  requestKey?: string
   sourceKind: SidecarSourceKind
   sourceMessageId: string
   sourceSeq: number
@@ -59,7 +60,7 @@ export interface CreateSidecarInput {
   sourceKind?: SidecarSourceKind
   quote: string
   question: string
-  accessMode?: SidecarAccessMode
+  accessMode: SidecarAccessMode
 }
 
 export interface PromptSidecarInput {
@@ -85,15 +86,4 @@ export interface HistoryEvent {
   time?: number
   data?: unknown
   [key: string]: unknown
-}
-
-export interface TranscriptItem {
-  key: string
-  seq: number
-  kind: 'user' | 'assistant' | 'reasoning' | 'tool' | 'error' | 'status'
-  text: string
-  rpcId?: string
-  collapsed?: boolean
-  sourceKind?: SidecarSourceKind
-  quote?: string
 }

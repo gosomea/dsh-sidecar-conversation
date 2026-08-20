@@ -1,5 +1,4 @@
-import type { HistoryEvent, TranscriptItem } from './types.js'
-import { unwrapSidecarQuestion } from './quote.js'
+import type { HistoryEvent } from './types.js'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -8,15 +7,28 @@ function record(value: unknown): UnknownRecord | undefined {
 }
 
 function contentText(value: unknown): string {
-  if (typeof value === 'string') return value
-  if (Array.isArray(value)) return value.map(contentText).filter(Boolean).join('\n')
-  const item = record(value)
-  if (item === undefined) return ''
-  if (typeof item.text === 'string') return item.text
-  if (typeof item.output === 'string') return item.output
-  if (typeof item.content !== 'undefined') return contentText(item.content)
-  if (typeof item.message !== 'undefined') return contentText(item.message)
-  return ''
+  const texts: string[] = []
+  const pending: unknown[] = [value]
+  const seen = new WeakSet<object>()
+  while (pending.length > 0) {
+    const current = pending.pop()
+    if (typeof current === 'string') {
+      if (current !== '') texts.push(current)
+      continue
+    }
+    if (typeof current !== 'object' || current === null || seen.has(current)) continue
+    seen.add(current)
+    if (Array.isArray(current)) {
+      for (let index = current.length - 1; index >= 0; index -= 1) pending.push(current[index])
+      continue
+    }
+    const item = current as UnknownRecord
+    if (typeof item.text === 'string') { if (item.text !== '') texts.push(item.text); continue }
+    if (typeof item.output === 'string') { if (item.output !== '') texts.push(item.output); continue }
+    if (typeof item.content !== 'undefined') { pending.push(item.content); continue }
+    if (typeof item.message !== 'undefined') pending.push(item.message)
+  }
+  return texts.join('\n')
 }
 
 export function mergeEvents(current: readonly HistoryEvent[], incoming: readonly HistoryEvent[]): HistoryEvent[] {
@@ -24,6 +36,17 @@ export function mergeEvents(current: readonly HistoryEvent[], incoming: readonly
   for (const event of current) bySeq.set(event.seq, event)
   for (const event of incoming) bySeq.set(event.seq, event)
   return [...bySeq.values()].sort((a, b) => a.seq - b.seq)
+}
+
+/** Find a history page boundary without spreading an unbounded event array into function arguments. */
+export function minimumEventSeq(events: readonly HistoryEvent[]): number {
+  if (events.length === 0) throw new Error('cannot find the boundary of an empty history page')
+  let minimum = events[0]?.seq ?? Number.POSITIVE_INFINITY
+  for (let index = 1; index < events.length; index += 1) {
+    const seq = events[index]?.seq
+    if (seq !== undefined && seq < minimum) minimum = seq
+  }
+  return minimum
 }
 
 export function eventRpcId(event: HistoryEvent): string | undefined {
@@ -37,6 +60,13 @@ export function hasPromptRpcId(events: readonly HistoryEvent[], rpcId: string): 
   return events.some(event => event.type === 'user/message' && eventRpcId(event) === rpcId)
 }
 
+/** Recover the exact durable text associated with one user prompt event. */
+export function userMessageText(event: HistoryEvent): string | undefined {
+  if (event.type !== 'user/message') return undefined
+  const data = record(event.data)
+  return contentText(data?.message ?? data?.content ?? data)
+}
+
 export function assistantMessage(event: HistoryEvent): { messageId: string; text: string } | undefined {
   if (event.type !== 'assistant/message') return undefined
   const data = record(event.data)
@@ -44,44 +74,4 @@ export function assistantMessage(event: HistoryEvent): { messageId: string; text
   const id = message?.id ?? data?.id
   if (typeof id !== 'string') return undefined
   return { messageId: id, text: contentText(message?.content ?? data?.content) }
-}
-
-export function transcriptFromEvents(events: readonly HistoryEvent[], fromRpcId?: string): TranscriptItem[] {
-  const result: TranscriptItem[] = []
-  let visible = fromRpcId === undefined
-  for (const event of events) {
-    const rpcId = eventRpcId(event)
-    if (!visible && rpcId === fromRpcId) visible = true
-    if (!visible) continue
-    const data = record(event.data)
-    const text = contentText(data?.message ?? data?.content ?? data)
-    if (event.type === 'user/message') {
-      const unwrapped = unwrapSidecarQuestion(text)
-      result.push({
-        key: `${event.seq}:user`, seq: event.seq, kind: 'user', text: unwrapped.question,
-        ...(rpcId === undefined ? {} : { rpcId }),
-        ...(unwrapped.sourceKind === undefined ? {} : { sourceKind: unwrapped.sourceKind }),
-        ...(unwrapped.quote === undefined ? {} : { quote: unwrapped.quote }),
-      })
-    } else if (event.type === 'assistant/message') {
-      const message = record(data?.message)
-      const blocks = Array.isArray(message?.content) ? message.content : []
-      for (const [index, blockValue] of blocks.entries()) {
-        const block = record(blockValue)
-        if (block?.type === 'reasoning') {
-          result.push({ key: `${event.seq}:reasoning:${index}`, seq: event.seq, kind: 'reasoning', text: contentText(block), collapsed: true })
-        } else if (block?.type === 'tool-call') {
-          result.push({ key: `${event.seq}:tool:${index}`, seq: event.seq, kind: 'tool', text: `${String(block.name ?? 'tool')}\n${String(block.arguments ?? '')}`, collapsed: true })
-        } else if (block?.type === 'text') {
-          result.push({ key: `${event.seq}:assistant:${index}`, seq: event.seq, kind: 'assistant', text: contentText(block) })
-        }
-      }
-      if (blocks.length === 0 && text) result.push({ key: `${event.seq}:assistant`, seq: event.seq, kind: 'assistant', text })
-    } else if (event.type === 'tool/result') {
-      result.push({ key: `${event.seq}:tool`, seq: event.seq, kind: 'tool', text: text || JSON.stringify(event.data), collapsed: true })
-    } else if (event.type.includes('error')) {
-      result.push({ key: `${event.seq}:error`, seq: event.seq, kind: 'error', text: text || event.type })
-    }
-  }
-  return result
 }

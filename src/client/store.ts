@@ -1,22 +1,7 @@
-import { SIDECAR_UI_STORAGE_KEY, type PromptSidecarInput, type SidecarDraft, type SidecarParentUiState, type SidecarRecord, type SidecarUiState } from '../core/types.js'
-
-const DEFAULT_WIDTH = 520
-
-function safeLoad(): SidecarUiState {
-  try {
-    const value = JSON.parse(localStorage.getItem(SIDECAR_UI_STORAGE_KEY) ?? '{}') as Partial<SidecarUiState>
-    const byParent = typeof value.byParent === 'object' && value.byParent !== null ? value.byParent : {}
-    for (const parent of Object.values(byParent)) {
-      if (parent.draft !== undefined && parent.draft.sourceKind === undefined) parent.draft.sourceKind = 'selection'
-      if (parent.draft !== undefined && parent.draft.accessMode === undefined) parent.draft.accessMode = 'read-only'
-      if (parent.draft !== undefined && parent.draft.forceNew === undefined) parent.draft.forceNew = true
-    }
-    return { byParent }
-  } catch { return { byParent: {} } }
-}
+import type { PromptSidecarInput, SidecarRecord } from '../core/types.js'
 
 export interface SidecarClientSnapshot {
-  ui: SidecarUiState
+  sidebarAvailable: boolean
   recordsByParent: Record<string, SidecarRecord[]>
   loadingParents: Record<string, boolean>
   optimisticByChild: Record<string, OptimisticPrompt[]>
@@ -34,89 +19,48 @@ export interface OptimisticPrompt {
 }
 
 export class SidecarClientStore {
-  private snapshot: SidecarClientSnapshot = { ui: safeLoad(), recordsByParent: {}, loadingParents: {}, optimisticByChild: {} }
+  private snapshot: SidecarClientSnapshot = { sidebarAvailable: false, recordsByParent: {}, loadingParents: {}, optimisticByChild: {} }
   private readonly listeners = new Set<() => void>()
 
   getSnapshot = (): SidecarClientSnapshot => this.snapshot
   subscribe = (listener: () => void): (() => void) => { this.listeners.add(listener); return () => this.listeners.delete(listener) }
 
-  parent(parentSessionId: string): SidecarParentUiState {
-    return this.snapshot.ui.byParent[parentSessionId] ?? { open: false, width: DEFAULT_WIDTH }
-  }
-
   records(parentSessionId: string): SidecarRecord[] { return this.snapshot.recordsByParent[parentSessionId] ?? [] }
 
+  setSidebarAvailable(available: boolean): void {
+    if (this.snapshot.sidebarAvailable === available) return
+    this.snapshot = { ...this.snapshot, sidebarAvailable: available }
+    this.emit()
+  }
+
   setRecords(parentSessionId: string, records: SidecarRecord[]): void {
-    const parent = this.parent(parentSessionId)
-    const activeExists = records.some(item => item.childSessionId === parent.activeChildSessionId)
-    const nextParent = { ...parent, ...(activeExists ? {} : records[0] === undefined ? {} : { activeChildSessionId: records[0].childSessionId }) }
     const { error: _error, ...withoutError } = this.snapshot
     this.snapshot = {
       ...withoutError,
-      recordsByParent: { ...this.snapshot.recordsByParent, [parentSessionId]: records },
+      recordsByParent: { ...this.snapshot.recordsByParent, [parentSessionId]: records.map(normalizeRecord) },
       loadingParents: { ...this.snapshot.loadingParents, [parentSessionId]: false },
-      ui: { byParent: { ...this.snapshot.ui.byParent, [parentSessionId]: nextParent } },
     }
-    this.persistAndEmit()
+    this.emit()
   }
 
   setLoading(parentSessionId: string): void {
-    this.snapshot = { ...this.snapshot, loadingParents: { ...this.snapshot.loadingParents, [parentSessionId]: true } }
+    const { error: _error, ...withoutError } = this.snapshot
+    this.snapshot = { ...withoutError, loadingParents: { ...this.snapshot.loadingParents, [parentSessionId]: true } }
+    this.emit()
+  }
+
+  setLoadError(parentSessionId: string, error: unknown): void {
+    this.snapshot = {
+      ...this.snapshot,
+      loadingParents: { ...this.snapshot.loadingParents, [parentSessionId]: false },
+      error: error instanceof Error ? error.message : String(error),
+    }
     this.emit()
   }
 
   setError(error: unknown): void {
     this.snapshot = { ...this.snapshot, error: error instanceof Error ? error.message : String(error) }
     this.emit()
-  }
-
-  openDraft(parentSessionId: string, draft: SidecarDraft): void {
-    // A fresh entry from the parent conversation must expose the access-mode
-    // choice directly. Reusing an existing Sidecar is an explicit opt-in.
-    this.updateParent(parentSessionId, current => ({
-      ...current,
-      open: true,
-      draft: { ...draft, forceNew: draft.forceNew ?? true },
-    }))
-  }
-
-  updateDraftQuestion(parentSessionId: string, question: string): void {
-    this.updateParent(parentSessionId, current => current.draft === undefined ? current : ({ ...current, draft: { ...current.draft, question } }))
-  }
-
-  setDraftForceNew(parentSessionId: string, forceNew: boolean): void {
-    this.updateParent(parentSessionId, current => current.draft === undefined ? current : ({
-      ...current, draft: { ...current.draft, forceNew },
-    }))
-  }
-
-  setDraftAccessMode(parentSessionId: string, accessMode: SidecarDraft['accessMode']): void {
-    this.updateParent(parentSessionId, current => current.draft === undefined ? current : ({
-      ...current, draft: { ...current.draft, accessMode },
-    }))
-  }
-
-  clearDraft(parentSessionId: string): void {
-    this.updateParent(parentSessionId, ({ draft: _draft, ...current }) => current)
-  }
-
-  useWholeTurnDraft(parentSessionId: string): void {
-    this.updateParent(parentSessionId, current => current.draft === undefined ? current : ({
-      ...current,
-      draft: { ...current.draft, sourceKind: 'turn', quote: '' },
-    }))
-  }
-
-  select(parentSessionId: string, childSessionId: string): void {
-    this.updateParent(parentSessionId, ({ draft: _draft, ...current }) => ({
-      ...current, activeChildSessionId: childSessionId, open: true,
-    }))
-  }
-
-  close(parentSessionId: string): void { this.updateParent(parentSessionId, current => ({ ...current, open: false })) }
-
-  resize(parentSessionId: string, width: number): void {
-    this.updateParent(parentSessionId, current => ({ ...current, width: Math.min(720, Math.max(400, Math.round(width))) }))
   }
 
   addOptimistic(input: PromptSidecarInput): void {
@@ -158,15 +102,10 @@ export class SidecarClientStore {
     this.emit()
   }
 
-  private updateParent(parentSessionId: string, update: (current: SidecarParentUiState) => SidecarParentUiState): void {
-    this.snapshot = { ...this.snapshot, ui: { byParent: { ...this.snapshot.ui.byParent, [parentSessionId]: update(this.parent(parentSessionId)) } } }
-    this.persistAndEmit()
-  }
-
-  private persistAndEmit(): void {
-    try { localStorage.setItem(SIDECAR_UI_STORAGE_KEY, JSON.stringify(this.snapshot.ui)) } catch { /* private mode */ }
-    this.emit()
-  }
-
   private emit(): void { for (const listener of this.listeners) listener() }
+}
+
+function normalizeRecord(record: SidecarRecord): SidecarRecord {
+  if (record.sourceKind === 'selection' || record.sourceKind === 'turn') return record
+  return { ...record, sourceKind: record.quote.trim() === '' ? 'turn' : 'selection' }
 }

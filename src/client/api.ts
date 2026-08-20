@@ -11,8 +11,10 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export class SidecarApi {
-  async list(parentSessionId: string): Promise<SidecarRecord[]> {
-    const result = await json<{ items: SidecarRecord[] }>(`/list?parentSessionId=${encodeURIComponent(parentSessionId)}`)
+  async list(parentSessionId: string, includeArchived = false): Promise<SidecarRecord[]> {
+    const query = new URLSearchParams({ parentSessionId })
+    if (includeArchived) query.set('includeArchived', 'true')
+    const result = await json<{ items: SidecarRecord[] }>(`/list?${query.toString()}`)
     return result.items
   }
   async create(input: CreateSidecarInput): Promise<SidecarRecord> {

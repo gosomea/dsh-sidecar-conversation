@@ -16,3 +16,8 @@
 }
 
 .turnAction:hover { color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover); }
+
+/* A Sidecar is one level deep and remains owned by the main Session. The
+ * native embedded Surface reuses assistant action slots, so hide this entry
+ * there instead of offering a misleading nested Sidecar. */
+:global([data-sidecar-native-surface]) .turnAction { display: none; }

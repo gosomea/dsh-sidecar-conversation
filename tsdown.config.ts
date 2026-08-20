@@ -24,7 +24,7 @@ export default defineConfig([
     fixedExtension: false,
     dts: false,
     clean: false,
-    external: [/^@deepseek-ai\//],
+    deps: { neverBundle: [/^@deepseek-ai\//] },
   },
   {
     name: `${pluginId}/client`,
@@ -37,8 +37,10 @@ export default defineConfig([
     dts: false,
     sourcemap: true,
     clean: false,
-    external: platformModules,
-    noExternal: (id: string) => platformModules.includes(id) ? undefined : true,
+    deps: {
+      neverBundle: platformModules,
+      alwaysBundle: (id: string) => platformModules.includes(id) ? undefined : true,
+    },
     plugins: [{
       name: 'sidecar-css-modules-inline',
       resolveId(source: string, importer: string | undefined) {

@@ -1,0 +1,10 @@
+.menu {
+  position: fixed;
+  z-index: 80;
+  padding: 3px;
+  pointer-events: auto;
+  border: 1px solid var(--dsw-alias-border-inverted);
+  border-radius: 12px;
+  background: var(--dsw-specific-menu);
+  box-shadow: var(--dsw-shadow-lv3);
+}

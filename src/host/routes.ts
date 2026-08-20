@@ -3,24 +3,9 @@ import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
 import { SIDECAR_API_PREFIX, type ArchiveSidecarInput, type CreateSidecarInput, type PromptSidecarInput } from '../core/types.js'
 import { SidecarService } from './sidecar-service.js'
 import { SidecarSseBroker } from './sse.js'
+import { assertJsonRequest, assertTrustedSidecarRequest } from './request-trust.js'
 
 const MAX_BODY_BYTES = 64 * 1024
-
-function isLoopback(address: string | undefined): boolean {
-  return address === undefined || address === '127.0.0.1' || address === '::1' || address.startsWith('::ffff:127.')
-}
-
-function assertLocalOrigin(req: IncomingMessage): void {
-  if (!isLoopback(req.socket.remoteAddress)) throw new Error('only loopback clients are allowed')
-  const origin = req.headers.origin
-  if (origin === undefined) return
-  const host = req.headers.host
-  if (!host) throw new Error('Host header is required')
-  const parsed = new URL(origin)
-  if (parsed.host !== host || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) {
-    throw new Error('cross-origin requests are not allowed')
-  }
-}
 
 async function readJson<T>(req: IncomingMessage): Promise<T> {
   const chunks: Buffer[] = []
@@ -47,8 +32,9 @@ function route(
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res) => {
     try {
-      assertLocalOrigin(req)
+      assertTrustedSidecarRequest(req)
       if (req.method !== method) { sendJson(res, 405, { error: 'method not allowed' }); return }
+      if (method === 'POST') assertJsonRequest(req)
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
       await handler(req, res, url)
     } catch (error: unknown) {

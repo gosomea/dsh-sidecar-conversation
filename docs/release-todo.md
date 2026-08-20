@@ -2,72 +2,76 @@
 
 当前状态：
 
-- [x] 代码已推送到 GitHub `main`
-- [x] README 默认使用精简中文说明
-- [x] `pnpm check`、`pnpm test`、`pnpm build` 通过
-- [x] npm 官方 registry 登录成功
-- [ ] 完成手动回归测试
-- [ ] 发布 `dsh-sidecar-conversation@0.1.0`
-- [ ] 创建并推送 `v0.1.0` 标签
-- [ ] 创建 GitHub Release
-- [ ] 在干净 profile 中验证公开安装
+- [ ] Better Sidebar Tab 重构完成手动验收
+- [x] 在包含通用 embedded Conversation Surface 的 Harness rc.8 源码构建中完成 Web 联调（2026-08-20 自动 smoke test；仍待用户回归）
+- [ ] 发布 npm（当前明确暂不发布）
+- [ ] 创建 Git 标签和 GitHub Release
+- [ ] 验证干净 profile 的公开安装
 
-## 手动回归
+在用户完成手动回归、确认源码 Harness 与 Better Sidebar 兼容之前，不执行 npm 发布、打标签或公开安装验证。当前主要安装方式是：先安装/升级 dsh-better-sidebar@^0.14.0，再用 link: 接入本地 dsh-sidecar-conversation。
 
-- [ ] 选中 Assistant 文字后，“在侧边聊天中提问”按钮稳定可点击，选区不会丢失。
-- [ ] “侧问这个回合”位于预期的回合操作位置，首次发送正常。
-- [ ] 新侧问直接显示“只读 / 继承”，默认只读，不默认续接历史 Sidecar。
-- [ ] “继续当前侧问”可以显式复用当前 Sidecar。
-- [ ] 只读模式可以查看和分析文件，但不能修改工作区或提升权限。
-- [ ] 继承模式沿用分叉点权限，工具调用和审批正常。
-- [ ] 输入法组合期间按回车不会误发送，组合结束后回车发送正常。
-- [ ] 用户消息发送后立即显示，不需要等待 Host 响应才出现在对话中。
-- [ ] 历史 Sidecar 标签可点击切换，选文卡片可以删除。
-- [ ] 切换父会话时，只显示该父会话自己的 Sidecar；切回后恢复标签、草稿和宽度。
-- [ ] 关闭 Sidecar 后主对话恢复居中。
-- [ ] Sidecar 隐藏期间生成继续，重新打开后历史补齐且不重复。
-- [ ] 与 `dsh-aionui-panel` 同时安装时，不覆盖主对话、文件、变更、预览或 Explorer 区域。
-- [ ] 深色和浅色主题显示正常，窄窗口与拖动宽度正常。
+## 用户验收
 
-## 发布 npm
+- [ ] Assistant 选区旁的“在侧边栏提问”在拖选结束后稳定可点击，移动到按钮不会丢失选区。
+- [ ] 任意已完成回合的“侧问这个回合”入口可打开 draft Tab 并正常发送。
+- [ ] 首次发送前明确选择“只读”或“继承”，没有默认替用户选择继承权限。
+- [ ] 只读可分析/搜索/查看文件但不能修改工作区；继承沿用分叉点权限。
+- [ ] 首次提问立即显示在 Sidecar Tab；native Surface 后续显示 Markdown、reasoning、工具、审批、question、running、停止、错误和重试，且不出现包装英文文本。
+- [ ] 输入法组合期间回车不会误发送，组合结束后回车发送正常。
+- [ ] 每个 Sidecar 只有一个 Better Sidebar Tab；历史 Tab 可点击切换，选文卡片可删除。
+- [ ] 关闭 Tab 不归档、不停止后台生成；重开后历史补齐且不重复。
+- [ ] 切换主会话只显示所属父会话的 Sidecar，返回后恢复原 Tab；主会话不会被覆盖。
+- [ ] 与 AionUI/文件/变更/预览/Explorer 同时安装时不新增列、不覆盖主会话。
+- [ ] 缺少 Better Sidebar 或 embedded Surface 时不会卡在 Loading plugins…，并显示明确错误。
+- [ ] 深色/浅色主题、窄窗口、刷新和 3080 端口重启均正常。
 
-确认手动回归全部通过后执行：
+## 本地验证
 
-```bash
-npm whoami --registry=https://registry.npmjs.org/
-npm publish --access public --registry=https://registry.npmjs.org/
-npm view dsh-sidecar-conversation version --registry=https://registry.npmjs.org/
-```
+    pnpm install --frozen-lockfile
+    pnpm check
+    pnpm test
+    pnpm build
+    pnpm pack --dry-run
 
-发布可能要求 npm 2FA 验证码。验证结果应为：
+    dsh plugin --profile web add dsh-better-sidebar@^0.14.0
+    dsh plugin --profile web add link:$(pwd)
+    dsh --profile web --dump-config
 
-```text
-0.1.0
-```
+源码 Harness 联调：
 
-## 标签与 Release
+    cd /path/to/deepseek-harness
+    pnpm run build:lib
+    pnpm run build:web
+    pnpm dsh web
 
-仅在 npm 发布成功后执行：
+## npm 发布（用户验收后再执行）
 
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
+登录和发布必须显式使用 npm 官方 registry：
 
-然后可在 GitHub 基于 `v0.1.0` 创建 Release，并在 README 恢复 npm 版本徽章。
+    npm login --registry=https://registry.npmjs.org/
+    npm whoami --registry=https://registry.npmjs.org/
+    npm publish --access public --registry=https://registry.npmjs.org/
+    npm view dsh-sidecar-conversation version --registry=https://registry.npmjs.org/
 
-## 公开安装验证
+验证结果应为 0.1.0。如果包名或验收结论有变化，先更新 README、兼容性说明和本清单，不要绕过检查直接发布。
 
-使用没有本地 `link:` 的干净 Web profile：
+## 标签与 Release（npm 发布成功后再执行）
 
-```bash
-dsh plugin --profile web add dsh-sidecar-conversation
-dsh --profile web --dump-config
-dsh web
-```
+    git tag v0.1.0
+    git push origin v0.1.0
 
-卸载验证：
+之后可以在 GitHub 基于 v0.1.0 创建 Release。标签必须对应已验证的 npm 发布提交。
 
-```bash
-dsh plugin --profile web remove dsh-sidecar-conversation
-```
+## 公开安装验证（发布成功后再执行）
+
+在没有本地 link: 依赖的干净 Web profile 中：
+
+    dsh plugin --profile web add dsh-better-sidebar@^0.14.0
+    dsh plugin --profile web add dsh-sidecar-conversation
+    dsh --profile web --dump-config
+    dsh web
+
+卸载：
+
+    dsh plugin --profile web remove dsh-sidecar-conversation
+    dsh plugin --profile web remove dsh-better-sidebar
