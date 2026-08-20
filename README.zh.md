@@ -9,6 +9,11 @@
     dsh --profile web --dump-config
     dsh web
 
+如果同时安装了 `@linxin666/dsh-web-ui-all`，出现 `duplicate prefix route "/sidebar/api"`，请保留独立的 `dsh-better-sidebar@0.14.x`，并在 `profiles/web/cordis.patch.yml` 中禁用聚合包里的重复入口：
+
+    - id: web-ui-better-sidebar
+      disabled: true
+
 本地开发才使用 link：
 
     cd /path/to/dsh-sidecar-conversation
