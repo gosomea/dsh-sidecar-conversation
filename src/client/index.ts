@@ -4,6 +4,7 @@ import type { ClientContext, SessionRuntime } from '@deepseek-ai/dsh-client-runt
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import { IconArchiveOutline20, IconNewChatOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SidecarController, type NativeConversationService } from './controller.js'
 import { SidecarAction } from './components/SidecarAction.js'
 import { SelectionOverlay } from './components/SelectionOverlay.js'
@@ -39,6 +40,8 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => registerSidecarTabs(sidebarContext, {
     chat: props => createElement(SidecarChatTab, { ...props, controller }),
     history: props => createElement(SidecarHistoryTab, { ...props, controller }),
+    chatIcon: size => createElement(IconNewChatOutline16, { size }),
+    historyIcon: size => createElement(IconArchiveOutline20, { size }),
   }, service => {
     const unbind = controller.bindSidebar(service)
     // Migration runs only after both descriptors are registered. Stable ids

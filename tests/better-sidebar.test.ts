@@ -33,7 +33,7 @@ function draft(): SidecarDraft {
 }
 
 function serviceStub(): BetterSidebarService & {
-  registrations: Array<{ id: string; component: unknown }>
+  registrations: Array<{ id: string; component: unknown; icon?: unknown }>
   opens: Array<{ seed: unknown; scope: unknown }>
   activations: Array<{ id: string; scope: unknown }>
   updates: Array<{ id: string; patch: unknown }>
@@ -41,14 +41,18 @@ function serviceStub(): BetterSidebarService & {
   disposed: string[]
 } {
   const result = {
-    registrations: [] as Array<{ id: string; component: unknown }>,
+    registrations: [] as Array<{ id: string; component: unknown; icon?: unknown }>,
     opens: [] as Array<{ seed: unknown; scope: unknown }>,
     activations: [] as Array<{ id: string; scope: unknown }>,
     updates: [] as Array<{ id: string; patch: unknown }>,
     closes: [] as Array<{ id: string; scope: unknown }>,
     disposed: [] as string[],
-    registerTab: vi.fn((descriptor: { id: string; component: unknown }) => {
-      result.registrations.push({ id: descriptor.id, component: descriptor.component })
+    registerTab: vi.fn((descriptor: { id: string; component: unknown; icon?: unknown }) => {
+      result.registrations.push({
+        id: descriptor.id,
+        component: descriptor.component,
+        ...(descriptor.icon === undefined ? {} : { icon: descriptor.icon }),
+      })
       return () => { result.disposed.push(descriptor.id) }
     }),
     openTab: vi.fn((seed: unknown, scope: unknown) => { result.opens.push({ seed, scope }) }),
@@ -59,7 +63,7 @@ function serviceStub(): BetterSidebarService & {
     subscribeState: vi.fn(() => () => undefined),
   }
   return result as unknown as BetterSidebarService & {
-    registrations: Array<{ id: string; component: unknown }>
+    registrations: Array<{ id: string; component: unknown; icon?: unknown }>
     opens: Array<{ seed: unknown; scope: unknown }>
     activations: Array<{ id: string; scope: unknown }>
     updates: Array<{ id: string; patch: unknown }>
@@ -81,14 +85,17 @@ describe('Sidecar Better Sidebar adapter', () => {
     }
     const chat = vi.fn(() => null)
     const history = vi.fn(() => null)
+    const chatIcon = vi.fn((size: number) => `chat-${size}`)
+    const historyIcon = vi.fn((size: number) => `history-${size}`)
 
-    const dispose = registerSidecarTabs(ctx, { chat, history })
+    const dispose = registerSidecarTabs(ctx, { chat, history, chatIcon, historyIcon })
 
     expect(ctx.effect).toHaveBeenCalledOnce()
     expect(service.registrations.map(item => item.id)).toEqual([
       SIDECAR_CHAT_TAB_TYPE,
       SIDECAR_HISTORY_TAB_TYPE,
     ])
+    expect(service.registrations.map(item => item.icon)).toEqual([chatIcon, historyIcon])
     dispose()
     expect(service.disposed).toEqual([SIDECAR_HISTORY_TAB_TYPE, SIDECAR_CHAT_TAB_TYPE])
     dispose()

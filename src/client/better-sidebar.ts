@@ -71,10 +71,12 @@ export interface BetterSidebarTabComponentProps {
 }
 
 export type SidecarTabComponent = (props: BetterSidebarTabComponentProps) => ReactNode
+export type BetterSidebarTabIcon = ReactNode | ((size: number) => ReactNode)
 
 export interface BetterSidebarTabDescriptor {
   id: string
   title: string | (() => string)
+  icon?: BetterSidebarTabIcon
   order?: number
   hidden?: boolean
   single?: boolean
@@ -111,6 +113,8 @@ export interface BetterSidebarContext {
 export interface SidecarTabComponents {
   chat: SidecarTabComponent
   history: SidecarTabComponent
+  chatIcon?: BetterSidebarTabIcon
+  historyIcon?: BetterSidebarTabIcon
 }
 
 export interface OpenSidecarDraftInput {
@@ -172,6 +176,7 @@ function registerAvailableTabs(
       disposers.push(service.registerTab({
         id: SIDECAR_CHAT_TAB_TYPE,
         title: '侧问',
+        ...(components.chatIcon === undefined ? {} : { icon: components.chatIcon }),
         order: 60,
         hidden: true,
         component: components.chat,
@@ -179,6 +184,7 @@ function registerAvailableTabs(
       disposers.push(service.registerTab({
         id: SIDECAR_HISTORY_TAB_TYPE,
         title: '侧问历史',
+        ...(components.historyIcon === undefined ? {} : { icon: components.historyIcon }),
         order: 61,
         single: true,
         component: components.history,
