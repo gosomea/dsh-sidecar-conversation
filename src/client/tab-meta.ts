@@ -1,3 +1,4 @@
+import { parseReference } from '../core/references.js'
 import type { SidecarDraft, SidecarRecord } from '../core/types.js'
 
 /** Version of the JSON stored in a Better Sidebar tab's `meta` field. */
@@ -19,6 +20,7 @@ export interface SidecarDraftTabMeta {
 }
 
 export interface SidecarActiveTabMeta {
+  initialDraft?: SidecarDraft
   version: typeof SIDECAR_TAB_META_VERSION
   kind: 'active'
   parentSessionId: string
@@ -90,6 +92,7 @@ export function parseSidecarTabMeta(value: unknown): SidecarTabMeta | undefined 
           parentSessionId: value.parentSessionId,
           requestKey: value.requestKey,
           childSessionId: value.childSessionId,
+          ...(isRecord(value.initialDraft) && parseDraft(value.initialDraft, value.requestKey) ? { initialDraft: parseDraft(value.initialDraft, value.requestKey)! } : {}),
         }
       : undefined
   }
@@ -126,14 +129,21 @@ function parseDraft(value: Record<string, unknown>, requestKey: string): (Sideca
     || !isAccessMode(value.accessMode)
   ) return undefined
   if (value.requestKey !== undefined && value.requestKey !== requestKey) return undefined
+  if (value.creationMode !== undefined && value.creationMode !== 'fork' && value.creationMode !== 'independent') return undefined
   if (value.forceNew !== undefined && typeof value.forceNew !== 'boolean') return undefined
+  let references
+  try { references = value.references === undefined ? undefined : Array.isArray(value.references) ? value.references.map(parseReference) : (() => { throw new Error('invalid references') })() } catch { return undefined }
   return {
+    ...(references === undefined ? {} : { references }),
+    ...(isNonNegativeInteger(value.sourceOffset) ? { sourceOffset: value.sourceOffset } : {}),
+    ...(value.creationConfirmed === true ? { creationConfirmed: true } : {}),
     sourceKind: value.sourceKind,
     sourceMessageId: value.sourceMessageId,
     sourceSeq: value.sourceSeq,
     quote: value.quote,
     question: value.question,
     accessMode: value.accessMode,
+    ...(value.creationMode === undefined ? {} : { creationMode: value.creationMode }),
     requestKey,
     ...(value.forceNew === undefined ? {} : { forceNew: value.forceNew }),
   }

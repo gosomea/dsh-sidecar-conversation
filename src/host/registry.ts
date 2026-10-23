@@ -75,9 +75,11 @@ function isRecord(value: unknown): value is SidecarRecord {
     && isNonEmptyString(item.sourceMessageId)
     && isNonNegativeSafeInteger(item.sourceSeq)
     && (item.sourceKind === undefined || item.sourceKind === 'selection' || item.sourceKind === 'turn')
+    && (item.creationMode === undefined || item.creationMode === 'fork' || item.creationMode === 'independent')
     && typeof item.quote === 'string'
-    && isNonEmptyString(item.firstQuestion)
-    && isNonEmptyString(item.firstPromptRpcId)
+    && (item.nativeComposer === true ? typeof item.firstQuestion === 'string' : isNonEmptyString(item.firstQuestion))
+    && (item.nativeComposer === true ? typeof item.firstPromptRpcId === 'string' : isNonEmptyString(item.firstPromptRpcId))
+    && (item.nativeComposer === undefined || typeof item.nativeComposer === 'boolean')
     && isAccessSnapshot(item.access)
     && isNonEmptyString(item.title)
     && isReasonableTimestamp(item.createdAt)
@@ -224,6 +226,25 @@ export class SidecarRegistry {
       const next = cloneRecord(record)
       records.push(next)
       return cloneRecord(next)
+    })
+  }
+
+  async noteNativeQuestion(childSessionId: string, question: string, title: string): Promise<SidecarRecord> {
+    return this.mutate(records => {
+      const record = records.find(item => item.childSessionId === childSessionId)
+      if (!record?.nativeComposer) throw new Error('not a native Sidecar')
+      if (!record.firstQuestion) { record.firstQuestion = question; record.title = title }
+      record.updatedAt = Date.now()
+      return cloneRecord(record)
+    })
+  }
+
+  async setTitle(childSessionId: string, title: string): Promise<SidecarRecord> {
+    return this.mutate(records => {
+      const record = records.find(item => item.childSessionId === childSessionId)
+      if (record === undefined || !title.trim()) throw new Error('invalid Sidecar title')
+      record.title = title
+      return cloneRecord(record)
     })
   }
 

@@ -1,62 +1,53 @@
 # dsh-sidecar-conversation
 
-面向 DeepSeek Harness Web 的会话绑定侧边对话插件。侧问作为 dsh-better-sidebar 的第三方 Tab 在右侧并列显示，主对话保持不变，并复用 Harness 原生 Conversation Surface 的消息、工具调用、审批和输入组件。
+Ask about selected text or a completed turn in DeepSeek Harness's native sidebar. Version 0.2.0 is an unpublished development version targeting DSH `0.2.1-alpha.3`; Better Sidebar is not required. [简体中文](./README.zh.md)
 
-> 兼容性提示：0.1.0 需要包含 detached Session 与 embedded Conversation Surface 扩展的 Harness 源码构建。当前官方 npm 版 Harness 尚未提供这两个运行时接口；未打补丁的官方 Web 可以安装插件，但打开 Sidecar 时会显示兼容性错误。
+## Usage
 
-## 快速使用
+Select text in a completed Assistant reply, or click “侧问这个回合” at the end of a turn, then choose an action:
 
-需要 Node.js 22+、兼容的 Harness Web 源码构建，以及 dsh-better-sidebar 0.14+。
+| Action | Result |
+| --- | --- |
+| 追加到最近侧问 (append) | Append to the current parent's most recently used Sidecar; shown only when that Session exists and its tab remains open |
+| 仅用选文新建／仅用此回合新建 (independent) | Create an independent Session containing the selection or the turn's final answer, plus your question |
+| 从此回合 Fork | Create a child Session inheriting history through that turn, with the current reference attached |
 
-    dsh plugin --profile web add dsh-better-sidebar@^0.14.0
-    dsh plugin --profile web add dsh-sidecar-conversation
-    dsh --profile web --dump-config
-    dsh web
+The left menu confirms the creation mode and opens the native composer directly. You can attach files, choose permissions and a model, or add more references. New chats do not copy another Sidecar's draft; explicit append preserves the target draft and adds references. Independent Sessions appear alongside the main Session; nested Fork rows depend on DSH's native workspace implementation, which this plugin does not modify.
 
-如果 profile 同时安装了 `@linxin666/dsh-web-ui-all`，它也会挂载一份 Better Sidebar。出现 `duplicate prefix route "/sidebar/api"` 时，请保留独立的 `dsh-better-sidebar@0.14.x`，并在 `profiles/web/cordis.patch.yml` 中禁用聚合包的重复入口：
+Sidecar history can create, reopen, archive and restore chats for the current source Session. Closing a tab closes its view without stopping generation. Switching main Sessions, reopening tabs and refreshing restore drafts and references by child Session; sent references remain clickable and highlight their source.
 
-    - id: web-ui-better-sidebar
-      disabled: true
+A compact Fork row links the fork turn, lag count and latest parent turn; appending references does not update inherited history. Independent Sessions indicate that they contain references without a Fork gap. Selections are limited to 4,000 characters.
 
-源码 Harness 联调：
+## Permissions and Sessions
 
-    cd /path/to/deepseek-harness
-    pnpm install
-    pnpm run build:lib
-    pnpm run build:web
-    pnpm dsh web
+Menu-created chats start read-only and can be changed through DSH's native permission picker. Read-only restricts workspace writes, not network access; Sidecars share the source workspace, so tools with write access can change the same files. The plugin does not automatically send replies back to the parent.
 
-如果本机已有 dsh-web 源码启动命令，它与最后一条命令等价。重复启动前先停止占用 3080 端口的旧进程。
+Sidecar titles use the first question's summary and preserve native custom names. Plugin archival changes Sidecar history status; native Sessions stay unarchived so they can run. Independent Sessions also appear in the source Session's Sidecar history, without establishing native parentage.
 
-## 功能与流程
+## Installation and development
 
-1. 在已完成的 Assistant 回复中选中文字，点击选区旁的“在侧边栏提问”；也可以点击回合操作区的“侧问这个回合”。选区最多 4,000 个字符。
-2. 首次发送前选择访问模式：
-   - **只读**：可以分析、搜索和查看文件，不能修改工作区。
-   - **继承**：沿用分叉点的权限，可以执行原会话允许的修改。
-3. 首次发送才创建独立子 Session，主会话不切换、不写回；用户问题会先在 Tab 中显示，再与 Host 历史和实时事件合并。
-4. 每个 Sidecar 对应一个 Better Sidebar Tab；“侧问历史”是当前主会话的历史入口。切换主会话只显示属于该父会话的 Tab。
-5. 关闭 Tab 只关闭视图，不等于归档，也不会停止后台生成。归档是显式操作，归档后仍可从历史恢复原来的子 Session。
+Install local source in an environment matching the target DSH version:
 
-侧问使用主会话的原生 Markdown、代码块、reasoning、工具调用、审批、停止、错误和 composer 组件，不维护第二套聊天 UI。插件只提供选区浮层和 Tab 内容，不修改 Harness Shell 网格，因此可以与兼容当前 Harness 版本的文件、变更、预览和 Explorer Tab 共存。
+```sh
+pnpm install --frozen-lockfile
+pnpm check
+pnpm test
+pnpm build
+dsh plugin --profile web add link:$(pwd)
+dsh --profile web --dump-config
+```
 
-访问模式在创建后不可切换；要换模式，请从主会话重新创建 Sidecar。Sidecar 与父会话记录隔离，但共享分叉点工作区，工具对共享文件的修改仍可能影响主会话。
+Restart the target Web instance after installation. Validate with a separate DSH_HOME, port and plugin build directory first to avoid rebuilding artifacts served by the daily instance. `--dump-config` proves configuration composition, not runtime loading. [Compatibility and validation limits](./docs/compatibility.md)
 
-## 本地开发
+Uninstall with `dsh plugin --profile web remove dsh-sidecar-conversation`. Dependencies use public npm packages, without TypeScript paths or workspace links into a local Harness checkout.
 
-    pnpm check
-    pnpm test
-    pnpm build
-    pnpm pack --dry-run
+## Persistence and validation
 
-本仓库是独立 workspace，不依赖外层 Harness checkout 的 TypeScript paths、workspace extends 或 link: 依赖。开发时通过 `dsh plugin --profile web add link:$(pwd)` 接入 Profile；不要手改 profiles/web/cordis.patch.yml。
+Messages, replies, attachments and tool events use native DSH Session capabilities. The plugin stores a Sidecar index and source associations; drafts and tabs are browser state. After clearing browser data, history can reopen sent conversations but cannot recover unsent drafts.
 
-更多设计说明见[架构](./docs/architecture.md)、[兼容性](./docs/compatibility.md)、[开发](./docs/development.md)和[发布前 TODO](./docs/release-todo.md)。
-
-## 卸载
-
-    dsh plugin --profile web remove dsh-sidecar-conversation
-    dsh plugin --profile web remove dsh-better-sidebar
+- [Native session logs: ownership, references and upgrade boundaries](./docs/native-session-log.md)
+- [2026-10-24 regression: both entry points, switching, reopening and refresh](./docs/regression-2026-10-24.md)
+- [Architecture](./docs/architecture.md) and [development](./docs/development.md)
 
 ## License
 

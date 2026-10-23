@@ -11,11 +11,20 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export class SidecarApi {
+  async serializeReference(reference: import('../core/references.js').SidecarReference): Promise<string> {
+    return (await json<{ text: string }>('/reference', { method: 'POST', body: JSON.stringify(reference) })).text
+  }
+  async latestSource(parentSessionId: string): Promise<{ sourceMessageId: string; sourceSeq: number }> {
+    return json(`/source?${new URLSearchParams({ parentSessionId })}`)
+  }
   async list(parentSessionId: string, includeArchived = false): Promise<SidecarRecord[]> {
     const query = new URLSearchParams({ parentSessionId })
     if (includeArchived) query.set('includeArchived', 'true')
     const result = await json<{ items: SidecarRecord[] }>(`/list?${query.toString()}`)
     return result.items
+  }
+  async prepare(input: CreateSidecarInput): Promise<SidecarRecord> {
+    return (await json<{ record: SidecarRecord }>('/prepare', { method: 'POST', body: JSON.stringify(input) })).record
   }
   async create(input: CreateSidecarInput): Promise<SidecarRecord> {
     return (await json<{ record: SidecarRecord }>('/create', { method: 'POST', body: JSON.stringify(input) })).record

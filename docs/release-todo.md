@@ -1,3 +1,5 @@
+> 历史记录：本文描述 0.1 方案；0.2 原生侧栏实现与验证边界见 [compatibility.md](./compatibility.md)。
+
 # v0.1.0 发布前 TODO
 
 当前状态：

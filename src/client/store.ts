@@ -58,6 +58,12 @@ export class SidecarClientStore {
     this.emit()
   }
 
+  clearError(): void {
+    const { error: _error, ...rest } = this.snapshot
+    this.snapshot = rest
+    this.emit()
+  }
+
   setError(error: unknown): void {
     this.snapshot = { ...this.snapshot, error: error instanceof Error ? error.message : String(error) }
     this.emit()

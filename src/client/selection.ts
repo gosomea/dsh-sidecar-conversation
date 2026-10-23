@@ -1,8 +1,8 @@
-import type { ConversationSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import { normalizeQuote, textContainsQuote } from '../core/quote.js'
 
 interface AssistantData {
   finalNode?: { messageId?: string; seq: number; blocks: readonly { kind: string; text?: string }[] }
+  closing?: { finalNode: { messageId?: string; seq: number }; blocks: readonly { kind: string; text?: string }[] }
 }
 
 export interface AssistantCandidate {
@@ -21,10 +21,21 @@ function sourceFromFinal(final: NonNullable<AssistantData['finalNode']>): { mess
   }
 }
 
-export function findAssistantSource(snapshot: ConversationSnapshot, messageId: string): { sourceSeq: number; text: string } | undefined {
-  for (const node of snapshot.chat.nodes.values()) {
+interface LegacyConversationSnapshot {
+  chat?: { nodes?: {
+    get(key: string): unknown
+    values(): Iterable<unknown>
+  } }
+}
+
+function legacyNodes(snapshot: LegacyConversationSnapshot): Iterable<unknown> {
+  return snapshot.chat?.nodes?.values() ?? []
+}
+
+export function findAssistantSource(snapshot: LegacyConversationSnapshot, messageId: string): { sourceSeq: number; text: string } | undefined {
+  for (const node of legacyNodes(snapshot)) {
     const data = (node as unknown as { kind?: string; data?: AssistantData }).data
-    const final = data?.finalNode
+    const final = data?.finalNode ?? (data?.closing === undefined || data.closing === null ? undefined : { ...data.closing.finalNode, blocks: data.closing.blocks })
     if (final?.messageId !== messageId) continue
     return { sourceSeq: final.seq, text: final.blocks.filter(block => block.kind === 'text').map(block => block.text ?? '').join('\n') }
   }
@@ -32,16 +43,16 @@ export function findAssistantSource(snapshot: ConversationSnapshot, messageId: s
 }
 
 /** Resolve the exact finalized Assistant node owning one rendered chat row. */
-export function assistantSourceForRow(snapshot: ConversationSnapshot, sourceRow: HTMLElement): AssistantCandidate | undefined {
+export function assistantSourceForRow(snapshot: LegacyConversationSnapshot, sourceRow: HTMLElement): AssistantCandidate | undefined {
   const nodeKey = sourceRow.dataset.chatFlowKey
   if (nodeKey === undefined) return undefined
-  const node = snapshot.chat.nodes.get(nodeKey)
+  const node = snapshot.chat?.nodes?.get(nodeKey)
   const final = (node as unknown as { data?: AssistantData } | undefined)?.data?.finalNode
   return final === undefined ? undefined : sourceFromFinal(final)
 }
 
-export function findAssistantAtSeq(snapshot: ConversationSnapshot, sourceSeq: number): { messageId: string; sourceSeq: number; text: string } | undefined {
-  for (const node of snapshot.chat.nodes.values()) {
+export function findAssistantAtSeq(snapshot: LegacyConversationSnapshot, sourceSeq: number): { messageId: string; sourceSeq: number; text: string } | undefined {
+  for (const node of legacyNodes(snapshot)) {
     const final = (node as unknown as { data?: AssistantData }).data?.finalNode
     if (final?.seq !== sourceSeq || final.messageId === undefined) continue
     return {
@@ -81,7 +92,7 @@ export function closestCandidate(candidates: readonly AssistantCandidate[], quot
     })[0]
 }
 
-export function selectedQuoteForMessage(snapshot: ConversationSnapshot, messageId: string, selectedText: string): { sourceSeq: number; quote: string } {
+export function selectedQuoteForMessage(snapshot: LegacyConversationSnapshot, messageId: string, selectedText: string): { sourceSeq: number; quote: string } {
   const source = findAssistantSource(snapshot, messageId)
   if (source === undefined) throw new Error('找不到这条已完成的 Assistant 消息')
   const quote = normalizeQuote(selectedText)

@@ -5,6 +5,7 @@ export const MAX_QUOTE_LENGTH = 4_000
 export const MAX_QUESTION_LENGTH = 32_000
 
 export type SidecarSourceKind = 'selection' | 'turn'
+export type SidecarCreationMode = 'fork' | 'independent'
 export type SidecarAccessMode = 'read-only' | 'inherit'
 
 export interface SidecarAccessSnapshot {
@@ -14,12 +15,15 @@ export interface SidecarAccessSnapshot {
 }
 
 export interface SidecarRecord {
+  /** New conversations use the native composer and native permission controls. */
+  nativeComposer?: boolean
   parentSessionId: string
   childSessionId: string
   requestKey: string
   sourceMessageId: string
   sourceSeq: number
   sourceKind?: SidecarSourceKind
+  creationMode?: SidecarCreationMode
   quote: string
   firstQuestion: string
   firstPromptRpcId: string
@@ -31,8 +35,12 @@ export interface SidecarRecord {
 }
 
 export interface SidecarDraft {
+  creationConfirmed?: boolean
+  sourceOffset?: number
+  references?: import('./references.js').SidecarReference[]
   requestKey?: string
   sourceKind: SidecarSourceKind
+  creationMode?: SidecarCreationMode
   sourceMessageId: string
   sourceSeq: number
   quote: string
@@ -58,6 +66,7 @@ export interface CreateSidecarInput {
   sourceMessageId: string
   sourceSeq: number
   sourceKind?: SidecarSourceKind
+  creationMode?: SidecarCreationMode
   quote: string
   question: string
   accessMode: SidecarAccessMode

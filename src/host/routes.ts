@@ -46,6 +46,15 @@ function route(
 
 export function registerRoutes(webServer: WebServer, service: SidecarService, broker: SidecarSseBroker): () => void {
   const disposers = [
+    webServer.register({ kind: 'exact', path: `${SIDECAR_API_PREFIX}/prepare`, handler: route('POST', async (req, res) => {
+      sendJson(res, 200, { record: await service.prepare(await readJson<CreateSidecarInput>(req)) })
+    }) }),
+    webServer.register({ kind: 'exact', path: `${SIDECAR_API_PREFIX}/reference`, handler: route('POST', async (req, res) => {
+      sendJson(res, 200, { text: await service.serializeReference(await readJson(req)) })
+    }) }),
+    webServer.register({ kind: 'exact', path: `${SIDECAR_API_PREFIX}/source`, handler: route('GET', async (_req, res, url) => {
+      sendJson(res, 200, await service.latestSource(url.searchParams.get('parentSessionId') ?? ''))
+    }) }),
     webServer.register({ kind: 'exact', path: `${SIDECAR_API_PREFIX}/list`, handler: route('GET', (_req, res, url) => {
       const parentSessionId = url.searchParams.get('parentSessionId') ?? ''
       const includeArchived = url.searchParams.get('includeArchived') === 'true'

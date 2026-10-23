@@ -94,6 +94,7 @@ export interface BetterSidebarOpenTabSeed {
 export interface BetterSidebarService {
   registerTab(descriptor: BetterSidebarTabDescriptor): () => void
   openTab(seed: BetterSidebarOpenTabSeed, scope: BetterSidebarSessionScope): void
+  restoreTab?(seed: BetterSidebarOpenTabSeed, scope: BetterSidebarSessionScope): void
   activateTab(tabId: string, scope: BetterSidebarSessionScope): void
   updateTab(tabId: string, patch: { title?: string; path?: string; meta?: unknown }): void
   closeTab(tabId: string, scope: BetterSidebarSessionScope): void

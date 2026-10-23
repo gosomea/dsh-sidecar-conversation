@@ -1,3 +1,4 @@
+import { questionTitle } from '../src/core/quote.js'
 import { describe, expect, it } from 'vitest'
 import { markdownVisibleText, normalizeQuote, quoteTitle, textContainsQuote, unwrapSidecarQuestion, wrapContextQuestion, wrapFirstQuestion, wrapSidecarQuestion } from '../src/core/quote.js'
 import { assistantMessage, hasPromptRpcId, mergeEvents } from '../src/core/transcript.js'
@@ -68,3 +69,15 @@ describe('history merge', () => {
     })).toEqual({ messageId: 'cyclic', text: '' })
   })
 })
+
+it('labels a sidecar from its first question without splitting emoji', () => {
+  expect(questionTitle(' 为什么\n 会这样？ ')).toBe('↳ 侧问 · 为什么 会这样？')
+  expect(questionTitle('😀'.repeat(30))).toBe('↳ 侧问 · ' + '😀'.repeat(28) + '…')
+})
+
+ it('accepts browser layout whitespace without accepting changed words', () => {
+  const source = '第一段 **内容**。\n\n1. 第一项；\n2. 第二项。'
+  expect(textContainsQuote(source, '内容。\n第一项；\n\n第二项')).toBe(true)
+  expect(textContainsQuote('alpha beta', 'alphabeta')).toBe(false)
+  expect(textContainsQuote(source, '第一项；第三项')).toBe(false)
+ })

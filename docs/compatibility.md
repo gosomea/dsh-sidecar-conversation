@@ -1,30 +1,63 @@
-# 兼容性
+# 兼容性与隔离验证
 
-## 当前联调基线
+## 当前实现
 
-- Node.js 22+
-- React 18
-- DeepSeek Harness Web，基于 rc.8 的源码构建
-- dsh-better-sidebar ^0.14.0
+0.2.0（本地未发布）适配 DSH `0.2.1-alpha.3`。Host 使用 Session Controller；客户端通过 `sidebarRight` / `sidebarRightTabs` 注册原生 Tab，通过 `sessions.retain`、SessionProvider 与 `conversation.content` factory 渲染子 Session。无需 Better Sidebar 或旧 detached Surface API。
 
-本次重构依赖通用 detached Session / embedded Conversation Surface。它还不是当前官方 Harness npm 包提供的运行时 API；如果你的源码构建尚未包含该 Surface，右侧 Tab 会显示兼容性错误，插件不会退回到旧 drawer 或自定义 transcript。请先应用对应的 Harness 源码扩展并重新构建 host/client。
+原 0.1 实现不能直接在本次新版基线上运行：`effectiveApprovalPolicy` 导出已移除；旧 detached/mountSurface API 不再适用；把子 Session 原生归档以隐藏它会被 archived-session gate 阻止执行。现已替换审批查询与客户端挂载，并保持子 Session 原生未归档。
 
-Sidecar 本身保持独立 workspace，使用公开的 @deepseek-ai/* 类型/构建依赖，不使用外层 Harness checkout 的 TypeScript paths、workspace extends 或 link: 依赖。运行时仍需使用与当前 Web profile 相容的 Harness 版本。
+## 2026-10-24 当前验收
 
-## Better Sidebar
+已部署到日常 3080；本轮回归没有重启或再次部署。选区与整回合入口、切换主会话、关闭重开、刷新、已发送引用跳转和新侧问焦点均通过；135 项测试及类型检查通过。718 个日常会话保留，740 个会话文件哈希不变。详见[回归记录](./regression-2026-10-24.md)和[原生 session log](./native-session-log.md)。
 
-必须安装一个 dsh-better-sidebar 0.14+ 实例。Sidecar 以可选动态服务接入：如果服务暂时不存在，插件不会让整个 Web 卡在 Loading plugins…，但侧问 Tab 无法打开；安装后需重启 Web 或重新加载 client。不要同时安装两份 Better Sidebar，否则会出现两个右侧面板和重复注册。
+以下 2026-10-23 记录保留各阶段当时的测试数量、构建状态与部署范围，不代表当前未部署；后续记录只扩大明确验证的范围。
 
-Better Sidebar 负责右侧面板、分栏、Tab 状态和会话定向打开；Sidecar 不再自己维护宽度、drawer、布局 observer 或内部 Tab。dsh-aionui-panel 等插件可继续注册它们自己的文件、变更、预览和 Explorer Tab，Sidecar 不会覆盖主会话或增加列。
+## 2026-10-23 验证基线
 
-实际联调时必须先确认这些第三方 UI 插件支持当前 Harness slot 契约。`@linxin666/dsh-web-ui-all@0.1.15` 在 rc.8 源码 Shell 中仍按旧方式注册 `settings.plugin.item`，会因缺少 keyed slot 的 `options.key` 让整个插件树启动失败；这发生在 Sidecar 挂载之前。当前联调 profile 暂不启用该 bundle，改用 Better Sidebar 自带的文件、源代码管理、终端和浏览器 Tab。待上游发布 rc.8 兼容版本后再做联合启用测试。
+- DSH 源码 HEAD：`01bac39c3d`，package 版本 `0.2.1-alpha.3`。
+- 隔离副本沿用的 Web 构建标识：`0.2.1-alpha.3-5719020-dirty`。本次未重建 DSH core/Web，不能视为对 HEAD 全新构建的验证。
+- Node 24；React 18；Cordis `4.0.5-alpha.2`。
+- 模型：`deepseek-codebuddy / deepseek-v4.1-flash`，High；主请求与子请求均完成真实调用。
+- 插件源码、DSH 源码、DSH_HOME、临时工作区和 3186 端口独立于日常 3080 实例。
 
-## 不支持与明确边界
+## 检查与结果
 
-- 旧版 Harness 没有通用 embedded Conversation Surface 时不支持原生聊天显示。
-- 0.1 联调范围只支持纯文本输入；暂不支持图片附件、拖拽文件和自动写回父会话。
-- 选区必须来自已完成的 Assistant 消息，长度不超过 4,000 字符；reasoning、tool JSON、跨消息选区不作为引用来源。整回合入口可对任意已完成回合发起侧问。
-- 只读模式约束工作区文件系统，不等同于网络隔离，也不能替第三方 MCP 判断副作用。
-- Sidecar 与父会话记录隔离，但共享工作区；继承权限下的工具可并发修改同一文件。
-- 访问模式创建后不可切换；关闭 Tab 不会归档或停止 child，归档需要显式操作。
-- npm 包只保证在包含上述源码扩展的 Harness 构建上工作；未打补丁的官方 Harness 暂不属于 0.1.0 的运行时兼容范围。
+| 层级 | 操作与独立证据 | 结果与范围 |
+| --- | --- | --- |
+| 逻辑 | TypeScript 检查；Vitest，包括归档 gate 回归、原生 Session 引用释放、显示投影及幂等发送 | 通过：13 个测试文件、90 项测试 |
+| 公开依赖 | 新目录 frozen-lockfile 安装 npm 依赖，执行 check/build | 通过；不是只依赖源码 symlink 编译 |
+| 安装与组合 | 独立 profile 用 `dsh plugin add link:` 安装，检查 manifest 与 dump-config | 通过；实际运行另由下列 Host/UI 验证 |
+| Host/模型 | 创建子 Session，检查父子 ID、临时 cwd、持久化 user/message 与 assistant/message | 通过；原始 archived gate 阻断也已复现 |
+| 原生侧栏 | 回合按钮创建并发送；渲染回复与磁盘日志比对 | 通过；部分后续后台点击需 DOM 诊断辅助，未覆盖所有鼠标路径 |
+| 刷新与故障 | 刷新恢复；阻断 list 接口再刷新 | 正常恢复；阻断后显示加载失败，不展示缓存回复 |
+| 重启与幂等 | 重启隔离 Host，归档/恢复，同一请求 key 发送两次 | 同一 rpcId，磁盘只一条新用户消息；模型记得此前父子标记 |
+| 父日志隔离 | 与初始父日志比较 | 无侧问消息混入；重启新增一条 session/end-seed，因此文件不是字节不变 |
+| 历史日志 | 只读复制一条旧 v0 zstd Session，用官方 catalog strict/current 转换 | 288 物理行转为 v4 的 138 逻辑事件，原 Assistant ID 保留，原文件 SHA-256 不变 |
+
+## 持久化与迁移边界
+
+侧问 registry 的 version 3 与原生 Session header 的 version 不是同一个版本号。抽样旧 Session 实际为 v0；当前 writer 为 v4。迁移会改变 seq，引用应按稳定消息 ID 重新定位，不能信任旧 sourceSeq。
+
+历史样本检查还扫描了日常库 722 个 Session header，确认该样本没有 child，因而官方迁移器使用空 child facts。共 15 条历史侧问只抽查了这一条；未验证其余 14 条，也未执行旧侧问在 Host/UI 中完整迁移后续聊。不要批量改写原日志来绕过迁移提示。
+
+## 2026-10-23 初次验证限制
+
+- 原生聊天视图显示完整继承历史，不做旧 afterSeq 裁剪。
+- 原生 Session 必须未归档才能运行，因此侧问在原生左侧会话列表可见；插件归档只影响侧问历史状态。
+- 此次未测试与其它第三方 sidebar 插件联合启用、全部工具审批交互、附件和跨设备 Tab 同步。
+- 打包结构检查不等于从 tgz 安装后的端到端测试；真实 Host 使用 link 安装。
+- 未修改或重启日常 DSH；未发布 npm、未替日常 profile 安装此开发版本。
+
+## 原生列表折叠（同日后续验证）
+
+隔离 DSH 的 ui-workspace 已加入按 parentId 折叠分叉会话：在分组视图中，侧问显示在可见父会话下面，箭头切换不改变当前会话，展开状态在浏览器中保存。置顶子会话、不可见父会话和跨分组父子保留独立行；搜索和平铺视图不嵌套。这是 DSH 原生源码改动，单独安装此插件包不会带来列表折叠。隔离环境已完整重建为 `0.2.1-alpha.3-01bac39-dirty`；日常 3080 产物未重建。工作区 467 项测试、build:artifacts 与 build:check 通过；doc-sync 为 42 通过、1 失败，失败来自未改动的 python/sdk/uv.lock:113 提交哈希引用。
+
+## 侧问标题
+
+标题使用首次提问摘要，原生 Tab 通过动态标题插槽展示，草稿未输入时显示“新侧问”。旧的引用范围默认名在启动恢复时更新，原生自定义名称保留。此迁移只追加原生重命名事件并更新侧问 registry，不改写消息。隔离三条旧侧问已核对 registry、原生会话列表和 Tab／历史标题，刷新后仍一致；94 项插件测试通过。
+
+## 独立新会话与历史新建
+
+新增可选 creationMode（缺省 fork，或 independent），旧记录仍按关联侧问读取。独立模式使用 Session Controller create，沿用工作区与所选权限，不设置 parentSessionId，不继承历史。发送内容只含明确选中文字和新问题。registry 保留来源会话关联以供历史入口查找。历史“新建侧问”由 Host 查询最近已完成回答，不依赖屏幕上已挂载的消息。
+
+隔离验证：API 和浏览器分别创建独立会话，原生 v4 header 均无 parentSessionId；日志无父会话测试标记，模型对未知标记回复 UNKNOWN；左侧 aria-level 为 1，关联侧问为 2；从历史按钮创建、选择独立模式、发送收到回复、从左侧打开均通过。100 项插件测试（含模式持久化、同请求模式冲突、权限复制、历史入口）通过。日常 3080 未部署。

@@ -1,11 +1,9 @@
-import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
-import type { SessionFace, SessionId, SessionRuntime } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SidecarReference } from '../core/references.js'
+import { questionTitle } from '../core/quote.js'
 import type { CreateSidecarInput, PromptSidecarInput, SidecarDraft, SidecarRecord } from '../core/types.js'
-import { unwrapSidecarQuestion } from '../core/quote.js'
 import { SidecarApi } from './api.js'
-import { SidecarClientStore, type OptimisticPrompt } from './store.js'
-import { assistantSourceForRow, closestCandidate, type AssistantCandidate } from './selection.js'
-import { textContainsQuote } from '../core/quote.js'
+import { SidecarClientStore } from './store.js'
+import { closestCandidate, type AssistantCandidate } from './selection.js'
 import {
   betterSidebarTabState,
   closeSidecar,
@@ -17,139 +15,38 @@ import {
 import { draftSidecarTabMeta, sidecarTabId, sidecarTabPath } from './tab-meta.js'
 import { migrateLegacySidecarTabs } from './legacy-migration.js'
 
-export interface NativeConversationService {
-  mountSurface(target: {
-    sessionId: SessionId
-    afterSeq: number
-    container: HTMLElement
-    header?: boolean
-    composer?: boolean
-    transformUserText?: (text: string) => string
-    hiddenContextPlugins?: readonly string[]
-    input?: {
-      submit: (text: string) => Promise<void> | void
-      cancel?: () => Promise<void> | void
-      textOnly?: boolean
-      placeholder?: string
-    }
-    pendingUserMessages?: readonly { id: string; text: string }[]
-  }): NativeConversationSurfaceHandle
-}
-
-export interface NativeConversationSurfaceHandle {
-  update(patch: {
-    pendingUserMessages?: readonly { id: string; text: string }[]
-  }): void
-  dispose(): void
-}
-
-interface DetachedSessionLease {
-  readonly binding: { readonly session: SessionFace }
-  readonly ready: Promise<void>
-  dispose(): void
-}
-
-interface EmbeddedSessionRuntime extends SessionRuntime {
-  acquireDetached?: (id: SessionId) => DetachedSessionLease
-}
-
 export class SidecarController {
+  selectionFromNavigation = false
+  recentTarget: ((parent: string) => { id: string; title: string } | undefined) | undefined
+  private targetRevision = 0
+  private readonly targetListeners = new Set<() => void>()
+  subscribeTargets = (fn: () => void): (() => void) => { this.targetListeners.add(fn); return () => { this.targetListeners.delete(fn) } }
+  getTargetRevision = (): number => this.targetRevision
+  targetsChanged(): void { this.targetRevision++; for (const fn of this.targetListeners) fn() }
+  turnNavigator: ((parent: string, turn: { turn: number; seq: number }) => Promise<void>) | undefined
+  jumpToTurn(parent: string, turn: { turn: number; seq: number }): void {
+    this.store.clearError()
+    this.selectionFromNavigation = true
+    if (this.turnNavigator) void this.turnNavigator(parent, turn).catch(error => this.store.setError(error))
+  }
+  referenceTarget: ((parent: string, draft: SidecarDraft, targetId?: string) => Promise<void>) | undefined
+  referenceNavigator: ((reference: SidecarReference) => Promise<void>) | undefined
+  addSource(parent: string, draft: SidecarDraft, targetId?: string): void {
+    this.store.clearError()
+    if (this.referenceTarget) void this.referenceTarget(parent, draft, targetId).catch(error => this.store.setError(error))
+    else this.openDraft(parent, draft)
+  }
+  jumpToSource(reference: SidecarReference): void {
+    this.store.clearError()
+    this.selectionFromNavigation = true
+    if (this.referenceNavigator) void this.referenceNavigator(reference).catch(error => this.store.setError(error))
+  }
   readonly api = new SidecarApi()
   readonly store = new SidecarClientStore()
   private readonly loads = new Map<string, Promise<void>>()
   private readonly candidates = new Map<string, Map<string, AssistantCandidate>>()
   private readonly migratedLegacyIds = new Set<string>()
   private sidebar: BetterSidebarService | undefined
-
-  constructor(
-    readonly connection: ConnectionHandle,
-    private readonly sessions: SessionRuntime,
-    private readonly resolveNativeConversation: () => NativeConversationService | undefined,
-    private readonly resolveSidebar: () => BetterSidebarService | undefined = () => undefined,
-  ) {}
-
-  async mountNativeSurface(record: SidecarRecord, container: HTMLElement): Promise<() => void> {
-    const acquireDetached = (this.sessions as EmbeddedSessionRuntime).acquireDetached
-    const conversation = this.resolveNativeConversation()
-    if (conversation === undefined) throw new Error('当前 Harness 未提供 Conversation Surface，请更新并重启 Harness')
-    if (acquireDetached === undefined) throw new Error('当前 Harness 未提供 detached Session，请更新并重启 Harness')
-
-    // Retaining a child does not select it as the current Session, so Sidecar
-    // tabs never leak into primary navigation. The binding exists
-    // synchronously; history completion is rendered by the native Surface's
-    // own loading state instead of blocking the panel mount.
-    const lease = acquireDetached.call(this.sessions, record.childSessionId as SessionId)
-    const delivered = deliveredPromptRpcIds(lease.binding.session)
-    this.store.resolveOptimistic(record.childSessionId, delivered)
-    let surface: NativeConversationSurfaceHandle
-    try {
-      surface = conversation.mountSurface({
-        sessionId: record.childSessionId as SessionId,
-        // The child is forked exactly at sourceSeq. Rendering only later events
-        // hides inherited parent history without polling for a first-prompt
-        // boundary that may not be durable yet.
-        afterSeq: record.sourceSeq,
-        container,
-        header: false,
-        composer: true,
-        transformUserText: text => unwrapSidecarQuestion(text).question,
-        hiddenContextPlugins: ['@deepseek-ai/dsh-system-prompt'],
-        input: {
-          submit: async text => {
-            await this.prompt({
-              childSessionId: record.childSessionId,
-              requestKey: `sidecar-prompt-${globalThis.crypto.randomUUID()}`,
-              question: text,
-            })
-          },
-          cancel: async () => {
-            const result = await lease.binding.session.cancel()
-            if (!result.ok) throw new Error(result.error.message)
-          },
-          textOnly: true,
-          placeholder: '继续在侧边提问…',
-        },
-        pendingUserMessages: pendingSurfaceMessages(
-          this.store.getSnapshot().optimisticByChild[record.childSessionId] ?? [],
-          delivered,
-        ),
-      })
-    } catch (error) {
-      lease.dispose()
-      throw error
-    }
-
-    let live = true
-    let syncing = false
-    const syncPending = (): void => {
-      if (!live || syncing) return
-      syncing = true
-      try {
-        const currentDelivered = deliveredPromptRpcIds(lease.binding.session)
-        this.store.resolveOptimistic(record.childSessionId, currentDelivered)
-        surface.update({
-          pendingUserMessages: pendingSurfaceMessages(
-            this.store.getSnapshot().optimisticByChild[record.childSessionId] ?? [],
-            currentDelivered,
-          ),
-        })
-      } finally {
-        syncing = false
-      }
-    }
-    const unsubscribeStore = this.store.subscribe(syncPending)
-    const unsubscribeSession = lease.binding.session.subscribe(syncPending)
-    syncPending()
-
-    return () => {
-      if (!live) return
-      live = false
-      unsubscribeStore()
-      unsubscribeSession()
-      surface.dispose()
-      lease.dispose()
-    }
-  }
 
   async load(parentSessionId: string): Promise<void> {
     const pending = this.loads.get(parentSessionId)
@@ -164,6 +61,17 @@ export class SidecarController {
       .finally(() => { this.loads.delete(parentSessionId) })
     this.loads.set(parentSessionId, task)
     return task
+  }
+
+  async prepare(parentSessionId: string, requestKey: string, draft: SidecarDraft): Promise<void> {
+    const record = await this.api.prepare({ parentSessionId, requestKey, sourceMessageId: draft.sourceMessageId,
+      sourceSeq: draft.sourceSeq, sourceKind: 'turn', creationMode: draft.creationMode ?? 'fork', quote: '', question: '', accessMode: draft.accessMode })
+    await this.load(parentSessionId)
+    this.requireSidebar().updateTab(sidecarTabId(requestKey), {
+      title: record.title, path: sidecarTabPath(requestKey),
+      meta: { version: 1, kind: 'active', parentSessionId, requestKey, childSessionId: record.childSessionId, initialDraft: draft },
+    })
+    this.store.setRecords(parentSessionId, [...this.store.records(parentSessionId).filter(r => r.childSessionId !== record.childSessionId), record])
   }
 
   async create(input: CreateSidecarInput): Promise<SidecarRecord> {
@@ -194,7 +102,7 @@ export class SidecarController {
     openSidecarDraft(service, {
       parentSessionId,
       requestKey,
-      draft: { ...draft, requestKey, forceNew: true },
+      draft: { ...draft, references: draft.references ?? [{ parentSessionId, sourceMessageId: draft.sourceMessageId, sourceSeq: draft.sourceSeq, sourceKind: draft.sourceKind, quote: draft.quote, ...(draft.sourceOffset === undefined ? {} : { textOffset: draft.sourceOffset }) }], requestKey, forceNew: true },
       title: draft.sourceKind === 'turn' ? '侧问 · 整个回合' : `侧问 · ${summary(draft.quote)}`,
     })
   }
@@ -202,6 +110,7 @@ export class SidecarController {
   updateDraft(parentSessionId: string, requestKey: string, draft: SidecarDraft): void {
     const service = this.requireSidebar()
     service.updateTab(sidecarTabId(requestKey), {
+      title: draft.question.trim() ? questionTitle(draft.question) : '新侧问',
       path: sidecarTabPath(requestKey),
       meta: draftSidecarTabMeta(parentSessionId, requestKey, { ...draft, requestKey, forceNew: true }),
     })
@@ -220,10 +129,16 @@ export class SidecarController {
         childSessionId: record.childSessionId,
       },
     })
+    service.activateTab(sidecarTabId(record.requestKey), { sessionId: record.parentSessionId })
   }
 
   openRecord(record: SidecarRecord): void {
     openSidecarActive(this.requireSidebar(), { record, title: record.title })
+  }
+
+  async newFromHistory(parentSessionId: string): Promise<void> {
+    const source = await this.api.latestSource(parentSessionId)
+    this.openDraft(parentSessionId, { ...source, sourceKind: 'turn', quote: '', question: '', accessMode: 'read-only', references: [] })
   }
 
   openHistory(parentSessionId: string): void {
@@ -246,7 +161,7 @@ export class SidecarController {
   }
 
   migrateLegacyTabs(available?: BetterSidebarService): void {
-    const service = available ?? this.sidebar ?? this.resolveSidebar()
+    const service = available ?? this.sidebar
     if (service === undefined) return
     const before = betterSidebarTabState(service.getSnapshot())
     const seeds = migrateLegacySidecarTabs({ records: this.store.getSnapshot().recordsByParent })
@@ -256,19 +171,16 @@ export class SidecarController {
         this.migratedLegacyIds.add(seed.id)
         continue
       }
-      service.openTab(seed, { sessionId: seed.meta.parentSessionId })
+      if (service.restoreTab) service.restoreTab(seed, { sessionId: seed.meta.parentSessionId })
+      else service.openTab(seed, { sessionId: seed.meta.parentSessionId })
       this.migratedLegacyIds.add(seed.id)
     }
     // Opening a migrated seed focuses it by design. Migration is background
     // compatibility work, so it must never steal a newly-created Sidecar (or
     // any other tab) that the user selected while registry loading finished.
-    if (before.sessionId !== undefined && before.activeTabId !== undefined) {
+    if (!service.restoreTab && before.sessionId !== undefined && before.activeTabId !== undefined) {
       service.activateTab(before.activeTabId, { sessionId: before.sessionId })
     }
-  }
-
-  face(childSessionId: string): SessionFace | undefined {
-    return this.sessions.binding(childSessionId as SessionId)?.session
   }
 
   registerAssistant(parentSessionId: string, candidate: AssistantCandidate): () => void {
@@ -281,15 +193,23 @@ export class SidecarController {
     }
   }
 
+  selectedSource(quote: string, sourceRow: HTMLElement): { parentSessionId: string; candidate: AssistantCandidate } | undefined {
+    const surface = sourceRow.closest<HTMLElement>('[data-conversation-session]')
+    if (surface?.closest('[data-sidecar-native-surface]')) return undefined
+    const markers = [...(surface ?? document).querySelectorAll<HTMLElement>('[data-sidecar-assistant-marker]')]
+      .filter(marker => !marker.closest('[data-sidecar-native-surface]') && (sourceRow.compareDocumentPosition(marker) & Node.DOCUMENT_POSITION_FOLLOWING))
+    const marker = markers[0]
+    const parentSessionId = marker?.dataset.sidecarSessionId
+    const messageId = marker?.dataset.sidecarMessageId
+    const sourceSeq = Number(marker?.dataset.sidecarSourceSeq)
+    if (!marker || !parentSessionId || !messageId || !Number.isSafeInteger(sourceSeq)) return undefined
+    if (surface && surface.dataset.conversationSession !== parentSessionId) return undefined
+    if (!sourceRow.innerText.replace(/\s+/g, ' ').includes(quote.replace(/\s+/g, ' '))) return undefined
+    return { parentSessionId, candidate: { marker, messageId, sourceSeq, text: sourceRow.innerText } }
+
+  }
+
   selectedAssistant(parentSessionId: string, quote: string, sourceRow: HTMLElement): AssistantCandidate | undefined {
-    const parentSnapshot = this.face(parentSessionId)?.getSnapshot()
-    if (parentSnapshot !== undefined) {
-      const exact = assistantSourceForRow(parentSnapshot, sourceRow)
-      if (exact !== undefined && textContainsQuote(exact.text, quote)) return { ...exact, marker: sourceRow }
-    }
-    // Compatibility fallback for Harness builds predating stable chat flow
-    // keys. Candidate text must still contain the quote, so proximity can no
-    // longer bind an older row to an unrelated later Assistant message.
     return closestCandidate([...(this.candidates.get(parentSessionId)?.values() ?? [])], quote, sourceRow)
   }
 
@@ -299,9 +219,9 @@ export class SidecarController {
   }
 
   private requireSidebar(): BetterSidebarService {
-    const service = this.sidebar ?? this.resolveSidebar()
+    const service = this.sidebar
     if (service === undefined) {
-      const error = new Error('侧问需要 dsh-better-sidebar 0.14 或更高版本')
+      const error = new Error('侧问需要 DSH 原生右侧栏')
       this.store.setError(error)
       throw error
     }
@@ -313,28 +233,4 @@ function summary(value: string): string {
   const compact = value.replace(/\s+/g, ' ').trim()
   if (!compact) return '选中内容'
   return compact.length > 24 ? `${compact.slice(0, 24)}…` : compact
-}
-
-function deliveredPromptRpcIds(session: SessionFace): Set<string> {
-  const delivered = new Set<string>()
-  // Message sources are intentionally extensible on the wire. Sidecar only
-  // reads the stable user-source rpcId and never walks nested payloads, which
-  // also avoids the recursive scans that caused earlier stack overflows.
-  for (const node of session.getSnapshot().nodes) {
-    if (node.kind !== 'user' && node.kind !== 'steering') continue
-    const source = node.source
-    if (typeof source !== 'object' || source === null) continue
-    const rpcId = (source as { rpcId?: unknown }).rpcId
-    if (typeof rpcId === 'string' && rpcId !== '') delivered.add(rpcId)
-  }
-  return delivered
-}
-
-function pendingSurfaceMessages(
-  optimistic: readonly OptimisticPrompt[],
-  delivered: ReadonlySet<string>,
-): readonly { id: string; text: string }[] {
-  return optimistic
-    .filter(item => item.state === 'sending' && (item.rpcId === undefined || !delivered.has(item.rpcId)))
-    .map(item => ({ id: item.requestKey, text: item.question }))
 }

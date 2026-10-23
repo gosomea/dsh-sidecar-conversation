@@ -1,12 +1,34 @@
+import { parseReference, referenceWire, referenceQuestion } from '../core/references.js'
 import { createHash } from 'node:crypto'
-import type { ApiProxy, HistoryEntry, RpcResponse } from '@deepseek-ai/dsh-host-apiproxy/api'
-import { RpcId } from '@deepseek-ai/dsh-host-apiproxy'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { assistantMessage, eventRpcId, hasPromptRpcId, minimumEventSeq, userMessageText } from '../core/transcript.js'
-import { normalizeQuestion, normalizeQuote, quoteTitle, textContainsQuote, wrapContextQuestion, wrapFirstQuestion, wrapSidecarQuestion } from '../core/quote.js'
+import { normalizeQuestion, normalizeQuote, quoteTitle, questionTitle, textContainsQuote, wrapContextQuestion, wrapIndependentQuestion, wrapFirstQuestion, wrapSidecarQuestion } from '../core/quote.js'
 import type { ArchiveSidecarInput, CreateSidecarInput, HistoryEvent, PromptSidecarInput, SidecarAccessMode, SidecarRecord } from '../core/types.js'
 import type { SidecarAccessBoundary } from './access.js'
 import { SidecarRegistry } from './registry.js'
+
+interface RpcResponse<T> {
+  result: { ok: true; value: T } | { ok: false; error: { code: string; message: string } }
+}
+
+interface HistoryEntry { event: HistoryEvent }
+
+/** Minimal host boundary used by Sidecar; adapters isolate DSH API generations. */
+export interface SidecarHostApi {
+  sessions: {
+    createIndependent(request: { rpcId: string; payload: { parentSessionId: SessionId; sessionId: SessionId } }): Promise<RpcResponse<{ sessionId: SessionId }>>
+    fork(request: { rpcId: string; payload: { sessionId: SessionId; atSeq: number } }): Promise<RpcResponse<{ sessionId: SessionId }>>
+    rename(request: { rpcId: string; payload: { sessionId: SessionId; title: string } }): Promise<RpcResponse<{ title: string; seq: number }>>
+    prompt(request: { rpcId: string; payload: { sessionId: SessionId; mode: 'queue'; content: Array<{ type: 'text'; text: string }> } }): Promise<RpcResponse<{ accepted: true }>>
+    history(request: { rpcId: string; payload: { sessionId: SessionId; beforeSeq?: number; maxMessages: number } }): Promise<RpcResponse<{ events: HistoryEntry[]; hasMore: boolean }>>
+    models(request: { rpcId: string; payload: { sessionId: SessionId } }): Promise<RpcResponse<unknown>>
+  }
+  workspace: {
+    ensureUsable(request: { rpcId: string; payload: { sessionId: SessionId } }): Promise<RpcResponse<unknown>>
+  }
+}
+
+function RpcId(value: string): string { return value }
 
 function stableRpcId(kind: string, key: string): ReturnType<typeof RpcId> {
   return RpcId(`sidecar-${kind}-${createHash('sha256').update(key).digest('hex').slice(0, 32)}`)
@@ -49,7 +71,7 @@ export class SidecarService {
   private readonly promptFlights = new Map<string, { text: string; task: Promise<void> }>()
 
   constructor(
-    private readonly api: ApiProxy,
+    private readonly api: SidecarHostApi,
     readonly registry: SidecarRegistry,
     private readonly access: SidecarAccessBoundary,
   ) {}
@@ -57,11 +79,26 @@ export class SidecarService {
   async recoverRegistered(): Promise<void> {
     await forEachBounded(this.registry.all(), 4, async (record) => {
       try {
-        await this.ensureHidden(record.childSessionId)
+        await this.ensureUsable(record.childSessionId)
         if (record.status === 'provisioning') await this.finishProvisioning(record)
+        else await this.upgradeTitle(record)
       }
       catch { /* A deleted legacy child must not prevent the plugin from booting. */ }
     })
+  }
+
+  private async upgradeTitle(record: SidecarRecord): Promise<void> {
+    if (record.title !== quoteTitle(record.quote, record.sourceKind)) return
+    const events = await this.history(record.childSessionId)
+    const data = events.findLast(event => event.type === 'session/title')?.data
+    const nativeTitle = typeof data === 'object' && data !== null && 'title' in data && typeof data.title === 'string' ? data.title : undefined
+    // Preserve a title the user has already changed through the native Session menu.
+    const title = nativeTitle !== undefined && nativeTitle !== record.title ? nativeTitle : questionTitle(record.firstQuestion)
+    if (nativeTitle !== title) unwrap(await this.api.sessions.rename({
+      rpcId: stableRpcId('title-upgrade', record.childSessionId),
+      payload: { sessionId: record.childSessionId as SessionId, title },
+    }))
+    await this.registry.setTitle(record.childSessionId, title)
   }
 
   list(parentSessionId: string, includeArchived = false): SidecarRecord[] {
@@ -69,16 +106,28 @@ export class SidecarService {
     return this.registry.list(parentSessionId, includeArchived)
   }
 
+  async prepare(input: CreateSidecarInput): Promise<SidecarRecord> {
+    return this.createRequest({ ...input, question: '' }, true)
+  }
+
   async create(input: CreateSidecarInput): Promise<SidecarRecord> {
+    return this.createRequest(input, false)
+  }
+
+  private async createRequest(input: CreateSidecarInput, nativeComposer: boolean): Promise<SidecarRecord> {
     const flightKey = createFlightKey(input)
     const pending = this.createFlights.get(flightKey)
-    if (pending !== undefined) return pending
-    const task = this.createInternal(input).finally(() => { this.createFlights.delete(flightKey) })
+    if (pending !== undefined) return pending.then(record => {
+      if (Boolean(record.nativeComposer) !== nativeComposer) throw new Error('requestKey belongs to another creation flow')
+      if ((record.creationMode ?? 'fork') !== (input.creationMode ?? 'fork')) throw new Error('requestKey is already bound to a different creation mode')
+      return record
+    })
+    const task = this.createInternal(input, nativeComposer).finally(() => { this.createFlights.delete(flightKey) })
     this.createFlights.set(flightKey, task)
     return task
   }
 
-  private async createInternal(input: CreateSidecarInput): Promise<SidecarRecord> {
+  private async createInternal(input: CreateSidecarInput, nativeComposer: boolean): Promise<SidecarRecord> {
     this.registry.ensureWritable()
     const parentSessionId = normalizeIdentity(input?.parentSessionId)
     const requestKey = normalizeIdentity(input?.requestKey)
@@ -90,25 +139,29 @@ export class SidecarService {
     if (input.sourceKind !== undefined && input.sourceKind !== 'selection' && input.sourceKind !== 'turn') {
       throw new Error('sourceKind must be selection or turn')
     }
+    const creationMode = input.creationMode ?? 'fork'
+    if (creationMode !== 'fork' && creationMode !== 'independent') throw new Error('invalid creationMode')
     const accessMode: SidecarAccessMode = input.accessMode
     if (accessMode !== 'read-only' && accessMode !== 'inherit') throw new Error('accessMode must be read-only or inherit')
     // Empty quotes are emitted only by whole-turn drafts. Inferring that mode keeps
     // the endpoint compatible with clients/boundaries that predate sourceKind.
     const sourceKind = input.sourceKind ?? (typeof input.quote === 'string' && input.quote.trim() === '' ? 'turn' : 'selection')
     const quote = sourceKind === 'turn' ? '' : normalizeQuote(typeof input.quote === 'string' ? input.quote : '')
-    const question = normalizeQuestion(typeof input.question === 'string' ? input.question : '')
+    const question = nativeComposer ? '' : normalizeQuestion(typeof input.question === 'string' ? input.question : '')
     const existing = this.registry.getByRequest(parentSessionId, requestKey)
     if (existing !== undefined) {
+      if (Boolean(existing.nativeComposer) !== nativeComposer) throw new Error('requestKey belongs to another creation flow')
+      if ((existing.creationMode ?? 'fork') !== creationMode) throw new Error('requestKey is already bound to a different creation mode')
       if (existing.access.mode !== accessMode) throw new Error('requestKey is already bound to a different Sidecar access mode')
       const existingSourceKind = existing.sourceKind ?? (existing.quote === '' ? 'turn' : 'selection')
       if (existing.sourceMessageId !== sourceMessageId
         || existingSourceKind !== sourceKind
         || existing.quote !== quote
-        || existing.firstQuestion !== question) {
+        || (!nativeComposer && existing.firstQuestion !== question)) {
         throw new Error('requestKey is already bound to a different Sidecar request')
       }
       if (existing.status === 'provisioning') return this.finishProvisioning(existing)
-      await this.ensureHidden(existing.childSessionId)
+      await this.ensureUsable(existing.childSessionId)
       await this.ensureLoaded(existing.childSessionId)
       this.access.assert(existing)
       // An active record means the first prompt was already accepted and the
@@ -122,21 +175,28 @@ export class SidecarService {
       throw new Error('选中的文字与父会话中的 Assistant 消息不一致，请重新选择后再发送')
     }
 
-    const forked = unwrap(await this.api.sessions.fork({
+    const digest = createHash('sha256').update(`${parentSessionId}:${requestKey}`).digest('hex').slice(0, 32)
+    const independentId = `session-${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20)}` as SessionId
+    const forked = creationMode === 'independent' ? unwrap(await this.api.sessions.createIndependent({
+      rpcId: stableRpcId('create', `${parentSessionId}:${requestKey}`),
+      payload: { parentSessionId: parentSessionId as SessionId, sessionId: independentId },
+    })) : unwrap(await this.api.sessions.fork({
       rpcId: stableRpcId('fork', `${parentSessionId}:${requestKey}`),
       payload: { sessionId: parentSessionId as SessionId, atSeq: source.seq },
     }))
     const childSessionId = String(forked.sessionId)
-    const title = quoteTitle(quote, sourceKind)
+    const title = nativeComposer ? '新侧问' : questionTitle(referenceQuestion(question))
     const firstPromptRpcId = String(stableRpcId('first-prompt', `${parentSessionId}:${requestKey}`))
     const now = Date.now()
     const record: SidecarRecord = {
+      ...(nativeComposer ? { nativeComposer: true } : {}),
       parentSessionId,
       childSessionId,
       requestKey,
       sourceMessageId,
       sourceSeq: source.seq,
       sourceKind,
+      creationMode,
       quote,
       firstQuestion: question,
       firstPromptRpcId,
@@ -151,14 +211,14 @@ export class SidecarService {
   }
 
   private async finishProvisioning(record: SidecarRecord): Promise<SidecarRecord> {
-    // Sidecars are implementation sessions, not primary navigation entries.
-    // Harness' archive registry hides them from every sidebar grouping while
-    // keeping their history, runtime binding and background work intact.
-    await this.ensureHidden(record.childSessionId)
+    // Native archive now blocks agent steps. Keep active sidecars runnable;
+    // the plugin registry owns its separate user-visible archive state.
+    await this.ensureUsable(record.childSessionId)
     await this.ensureLoaded(record.childSessionId)
     let access
     try {
-      access = this.access.apply(record.childSessionId, record.access.mode)
+      if (record.creationMode === 'independent' && record.access.mode === 'inherit') await this.ensureLoaded(record.parentSessionId)
+      access = this.access.apply(record.childSessionId, record.access.mode, record.creationMode === 'independent' ? record.parentSessionId : undefined)
     } catch (error: unknown) {
       throw new Error(`Sidecar 权限恢复失败：${error instanceof Error ? error.message : String(error)}`, { cause: error })
     }
@@ -170,9 +230,25 @@ export class SidecarService {
         payload: { sessionId: record.childSessionId as SessionId, title: record.title },
       }))
     } catch { /* title is best effort; the registry remains authoritative */ }
-    await this.ensurePrompt(record.childSessionId, record.firstPromptRpcId,
-      wrapFirstQuestion(record.quote, record.firstQuestion, record.sourceKind))
+    if (!record.nativeComposer) await this.ensurePrompt(record.childSessionId, record.firstPromptRpcId,
+      record.creationMode === 'independent' ? wrapIndependentQuestion(record.quote, record.firstQuestion) : wrapFirstQuestion(record.quote, record.firstQuestion, record.sourceKind))
     return this.registry.activate(record.childSessionId, access)
+  }
+
+  async noteNativeEvent(child: string, event: HistoryEvent): Promise<void> {
+    const record = this.registry.getByChild(child)
+    if (!record?.nativeComposer) return
+    if (event.type === 'session/title') {
+      const data = event.data as { title?: string }
+      if (data?.title && data.title !== record.title) await this.registry.setTitle(child, data.title)
+      return
+    }
+    const data = event.data as { source?: { kind?: string }; message?: { source?: { kind?: string } } } | undefined
+    if (event.type !== 'user/message' || (data?.source ?? data?.message?.source)?.kind !== 'user') return
+    const question = referenceQuestion(userMessageText(event) ?? '') || '附件侧问'
+    const first = !record.firstQuestion
+    const updated = await this.registry.noteNativeQuestion(child, question, questionTitle(question))
+    if (first) unwrap(await this.api.sessions.rename({ rpcId: stableRpcId('native-title', child), payload: { sessionId: child as SessionId, title: updated.title } }))
   }
 
   async prompt(input: PromptSidecarInput): Promise<{ accepted: true; rpcId: string }> {
@@ -221,6 +297,23 @@ export class SidecarService {
       if (assistant?.messageId === messageId) return { ...assistant, seq: event.seq }
     }
     throw new Error('在父会话历史中找不到这条已完成的 Assistant 消息，请刷新页面后重新选择')
+  }
+
+  async serializeReference(value: unknown): Promise<string> {
+    const ref = parseReference(value)
+    const source = await this.resolveAssistantSource(ref.parentSessionId, ref.sourceMessageId)
+    if (ref.sourceKind === 'selection' && !textContainsQuote(source.text, ref.quote)) throw new Error('无法在原消息中匹配这段选文，请移除该引用后重新选择')
+    return referenceWire({ ...ref, sourceSeq: source.seq }, ref.sourceKind === 'turn' ? source.text : ref.quote)
+  }
+
+  async latestSource(parentSessionId: string): Promise<{ sourceMessageId: string; sourceSeq: number }> {
+    if (!parentSessionId.trim()) throw new Error('parentSessionId is required')
+    const events = await this.history(parentSessionId, items => items.some(event => assistantMessage(event) !== undefined))
+    for (const event of [...events].reverse()) {
+      const source = assistantMessage(event)
+      if (source !== undefined) return { sourceMessageId: source.messageId, sourceSeq: event.seq }
+    }
+    throw new Error('主会话还没有已完成的回答，请先完成一轮对话再新建侧问')
   }
 
   async archive(input: ArchiveSidecarInput): Promise<SidecarRecord> {
@@ -298,8 +391,8 @@ export class SidecarService {
     return task
   }
 
-  private async ensureHidden(childSessionId: string): Promise<void> {
-    unwrap(await this.api.workspace.archiveSession({
+  private async ensureUsable(childSessionId: string): Promise<void> {
+    unwrap(await this.api.workspace.ensureUsable({
       rpcId: stableRpcId('hide', childSessionId),
       payload: { sessionId: childSessionId as SessionId },
     }))

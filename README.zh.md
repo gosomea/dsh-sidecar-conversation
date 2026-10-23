@@ -1,28 +1,54 @@
 # dsh-sidecar-conversation
 
-这是 [README.md](./README.md) 的简体中文说明，内容保持一致。插件面向 DeepSeek Harness Web，将选区侧问和整回合侧问作为 dsh-better-sidebar 的第三方 Tab，复用 Harness 原生 Conversation Surface，并让每个 Sidecar 固定绑定一个父会话。
+在 DeepSeek Harness 原生右侧栏中针对选文或整个回合提问。0.2.0 为尚未发布的开发版本，适配 DSH `0.2.1-alpha.3`；无需 Better Sidebar。[English](./README.md)
 
-0.1.0 需要包含 detached Session 与 embedded Conversation Surface 扩展的 Harness 源码构建。当前官方 npm 版 Harness 尚未提供这两个运行时接口；未打补丁的官方 Web 可以安装插件，但打开 Sidecar 时会显示兼容性错误。
+## 使用
 
-    dsh plugin --profile web add dsh-better-sidebar@^0.14.0
-    dsh plugin --profile web add dsh-sidecar-conversation
-    dsh --profile web --dump-config
-    dsh web
+选中已完成的 Assistant 回复，或点击回合末尾的「侧问这个回合」，选择以下操作：
 
-如果同时安装了 `@linxin666/dsh-web-ui-all`，出现 `duplicate prefix route "/sidebar/api"`，请保留独立的 `dsh-better-sidebar@0.14.x`，并在 `profiles/web/cordis.patch.yml` 中禁用聚合包里的重复入口：
+| 操作 | 结果 |
+| --- | --- |
+| 追加到最近侧问 | 加到当前主会话最近使用的侧问；只有该侧问已创建且标签未关闭时显示 |
+| 仅用选文新建／仅用此回合新建 | 创建独立 Session，只带入选文或该回合的最终回答，以及你的问题 |
+| 从此回合 Fork | 创建关联子 Session，继承截至该回合的历史，并附上本次引用 |
 
-    - id: web-ui-better-sidebar
-      disabled: true
+创建方式在左侧菜单确认，右侧直接显示原生输入框。可上传文件、选择权限和模型，也可继续添加多个引用。新建不会复制其他侧问的草稿；明确追加才会保留目标草稿并累加引用。独立会话与主会话在左侧同级；Fork 的列表折叠取决于 DSH 原生工作区实现，单独安装此插件不会修改列表布局。
 
-本地开发才使用 link：
+「侧问历史」可新建、重新打开、归档和恢复当前来源会话的侧问。关闭标签只关闭视图，不会停止生成。切换主会话、关闭重开和刷新后，草稿与引用按子 Session 恢复；已发送引用仍能点击定位高亮来源。
 
-    cd /path/to/dsh-sidecar-conversation
-    pnpm install
-    dsh plugin --profile web add link:$(pwd)
+Fork 上方的一行提示显示分叉回合、落后轮数与最新主回合，可点击跳转；追加引用不会补齐 Fork 的历史。独立会话只提示带入引用，不显示 Fork 差距。选文最多 4,000 字符。
 
-    cd /path/to/deepseek-harness
-    pnpm run build:lib
-    pnpm run build:web
-    pnpm dsh web
+## 权限与会话
 
-完整功能流程、权限说明、Tab 生命周期和兼容边界请看[主 README](./README.md)。
+菜单新建默认只读，之后使用 DSH 原生权限选择器调整。只读限制工作区写入，不表示网络隔离；侧问共享来源会话的工作区，允许写入的工具可修改同一批文件。插件不自动把回复写回主会话。
+
+侧问标题使用首次问题摘要，保留原生自定义名称。插件归档只改变侧问历史状态；原生 Session 保持未归档以便继续运行。独立 Session 也会记录在来源会话的侧问历史中，这不是原生父子关系。
+
+## 安装与开发
+
+在与目标 DSH 版本匹配的环境中安装本地源码：
+
+```sh
+pnpm install --frozen-lockfile
+pnpm check
+pnpm test
+pnpm build
+dsh plugin --profile web add link:$(pwd)
+dsh --profile web --dump-config
+```
+
+安装后重启目标 Web 实例。先在独立 DSH_HOME、端口和插件构建目录验证，避免重建日常实例正在使用的产物。`--dump-config` 只证明配置组合成功，不证明插件已加载。[兼容性与验证边界](./docs/compatibility.md)
+
+卸载使用 `dsh plugin --profile web remove dsh-sidecar-conversation`。依赖来自公开 npm 包，不需要本机 Harness checkout 的 TypeScript paths 或 workspace link。
+
+## 持久化与验证
+
+消息、回复、附件和工具事件使用 DSH 原生 Session 能力。插件只保存侧问索引和来源关联；草稿与标签属于浏览器状态。清除浏览器数据后可从历史重新打开已发送的对话，但不能据此恢复未发送草稿。
+
+- [原生 session log：职责、引用格式与升级边界](./docs/native-session-log.md)
+- [2026-10-24 回归：两个入口、切换、重开与刷新](./docs/regression-2026-10-24.md)
+- [架构](./docs/architecture.md)与[开发](./docs/development.md)
+
+## License
+
+[Apache License 2.0](./LICENSE)

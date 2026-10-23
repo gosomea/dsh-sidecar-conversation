@@ -24,8 +24,9 @@ import type { SidecarDraft, SidecarRecord } from '../src/core/types.js'
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   Button: (props: { children?: unknown; [key: string]: unknown }) =>
     createElement('button', props, props.children),
-  IconCloseOutline16: () => null,
-  IconSendOutline16: () => null,
+  ReferenceChip: ({ label, onActivate, title }: any) => createElement(onActivate ? 'button' : 'span', { onClick: onActivate, title }, label),
+  IconCloseOutlineMedium: () => null,
+  IconSendOutlineMedium: () => null,
 }))
 
 type Snapshot = {
@@ -36,6 +37,7 @@ type Snapshot = {
 }
 
 interface FakeController {
+  api: { serializeReference: ReturnType<typeof vi.fn> }
   store: {
     subscribe: (listener: () => void) => () => void
     getSnapshot: () => Snapshot
@@ -43,11 +45,12 @@ interface FakeController {
     ackOptimistic: ReturnType<typeof vi.fn>
     setError: ReturnType<typeof vi.fn>
   }
+  prepare: ReturnType<typeof vi.fn>
+  newFromHistory: ReturnType<typeof vi.fn>
   load: ReturnType<typeof vi.fn>
   updateDraft: ReturnType<typeof vi.fn>
   create: ReturnType<typeof vi.fn>
   activateTab: ReturnType<typeof vi.fn>
-  mountNativeSurface: ReturnType<typeof vi.fn>
   openRecord: ReturnType<typeof vi.fn>
   archive: ReturnType<typeof vi.fn>
 }
@@ -72,6 +75,7 @@ function makeController(snapshot: Snapshot = makeSnapshot()): FakeController {
   const subscribe = vi.fn((_listener: () => void) => () => undefined)
   const getSnapshot = vi.fn(() => snapshot)
   return {
+    api: { serializeReference: vi.fn(async () => '') },
     store: {
       subscribe,
       getSnapshot,
@@ -79,11 +83,12 @@ function makeController(snapshot: Snapshot = makeSnapshot()): FakeController {
       ackOptimistic: vi.fn(),
       setError: vi.fn(),
     },
+    prepare: vi.fn(async () => undefined),
+    newFromHistory: vi.fn(async () => undefined),
     load: vi.fn(async () => undefined),
     updateDraft: vi.fn(),
     create: vi.fn(),
     activateTab: vi.fn(),
-    mountNativeSurface: vi.fn(async () => () => undefined),
     openRecord: vi.fn(),
     archive: vi.fn(async () => undefined),
   }
@@ -169,74 +174,46 @@ describe('Sidecar Better Sidebar tabs', () => {
     expect(container.textContent).toContain('这个侧问属于另一个主会话')
   })
 
-  it('renders the draft access choice and persists read-only/inherit changes', async () => {
+  it('opens the chosen native lineage with the existing question and references, without sending', async () => {
     const controller = makeController()
-    const meta = draftSidecarTabMeta('parent-1', 'parent-1:selection:request-1', draft())
-    const container = await render(
-      <SidecarChatTab controller={asController(controller)} {...chatProps(controller, meta)} />,
-    )
-
-    const radios = Array.from(container.querySelectorAll('[role="radio"]')) as HTMLButtonElement[]
-    expect(radios).toHaveLength(2)
-    expect(radios[0]?.getAttribute('aria-checked')).toBe('true')
-    expect(radios[1]?.getAttribute('aria-checked')).toBe('false')
-
-    await act(async () => { radios[1]?.click() })
-
-    expect(radios[1]?.getAttribute('aria-checked')).toBe('true')
-    expect(controller.updateDraft).toHaveBeenCalledWith(
-      'parent-1',
-      'parent-1:selection:request-1',
-      expect.objectContaining({ accessMode: 'inherit', requestKey: 'parent-1:selection:request-1' }),
-    )
-  })
-
-  it('does not send Enter while composing Chinese IME text, then sends after composition ends', async () => {
-    const controller = makeController()
-    const meta = draftSidecarTabMeta('parent-1', 'parent-1:selection:request-1', draft({ question: '输入中的问题' }))
-    controller.create.mockResolvedValue(record())
-    const container = await render(
-      <SidecarChatTab controller={asController(controller)} {...chatProps(controller, meta)} />,
-    )
-    const textarea = container.querySelector('textarea')
-    if (!(textarea instanceof HTMLTextAreaElement)) throw new Error('textarea not found')
-
-    await act(async () => {
-      textarea.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
-      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-    })
-    expect(controller.create).not.toHaveBeenCalled()
-
-    await act(async () => {
-      textarea.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }))
-      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-      await Promise.resolve()
-    })
-    expect(controller.create).toHaveBeenCalledOnce()
-    expect(controller.create).toHaveBeenCalledWith(expect.objectContaining({
-      parentSessionId: 'parent-1',
-      requestKey: 'parent-1:selection:request-1',
-      question: '输入中的问题',
-    }))
-  })
-
-  it('activates the same stable tab after the first create succeeds', async () => {
-    const controller = makeController()
-    const initial = draft()
+    const initial = draft({ question: '输入中的问题' })
     const meta = draftSidecarTabMeta('parent-1', initial.requestKey, initial)
-    const created = record({ requestKey: initial.requestKey, childSessionId: 'child-created' })
-    controller.create.mockResolvedValue(created)
-    const container = await render(
-      <SidecarChatTab controller={asController(controller)} {...chatProps(controller, meta)} />,
-    )
+    const container = await render(<SidecarChatTab controller={asController(controller)} {...chatProps(controller, meta)} />)
+    expect(container.querySelector('textarea')).toBeNull()
+    await act(async () => { buttonByText(container, '独立新会话').click() })
+    expect(controller.prepare).toHaveBeenCalledWith('parent-1', initial.requestKey, expect.objectContaining({ question: '输入中的问题', creationMode: 'independent' }))
+    expect(controller.create).not.toHaveBeenCalled()
+    expect(controller.activateTab).not.toHaveBeenCalled()
+  })
 
-    await act(async () => { buttonByText(container, '发送').click(); await Promise.resolve() })
+  it('opens a confirmed selection mode directly without asking again on the right', async () => {
+    const controller = makeController()
+    const initial = draft({ creationConfirmed: true, creationMode: 'independent' })
+    const meta = draftSidecarTabMeta('parent-1', initial.requestKey, initial)
+    const container = await render(<SidecarChatTab controller={asController(controller)} {...chatProps(controller, meta)} />)
+    expect(controller.prepare).toHaveBeenCalledOnce()
+    expect(controller.prepare).toHaveBeenCalledWith('parent-1', initial.requestKey, expect.objectContaining({ creationMode: 'independent' }))
+    expect(container.textContent).not.toContain('关联侧问')
+    expect(container.textContent).not.toContain('独立新会话')
+  })
 
-    expect(controller.activateTab).toHaveBeenCalledWith(created)
-    expect(controller.store.addOptimistic).toHaveBeenCalledWith(expect.objectContaining({
-      childSessionId: 'child-created',
-      requestKey: `first:${initial.requestKey}`,
-    }))
+  it('does not let an already-created hidden draft steal focus after history reload', async () => {
+    const r = record()
+    const controller = makeController(makeSnapshot({ 'parent-1': [r] }))
+    const meta = draftSidecarTabMeta('parent-1', r.requestKey, draft())
+    await render(<SidecarChatTab controller={asController(controller)} {...chatProps(controller, meta, { visible: false })} />)
+    expect(controller.activateTab).not.toHaveBeenCalled()
+  })
+
+  it('preserves a failed preparation for retry without switching tabs', async () => {
+    const controller = makeController(); controller.prepare.mockRejectedValueOnce(new Error('offline'))
+    const initial = draft(); const meta = draftSidecarTabMeta('parent-1', initial.requestKey, initial)
+    const container = await render(<SidecarChatTab controller={asController(controller)} {...chatProps(controller, meta)} />)
+    await act(async () => { buttonByText(container, '关联侧问').click() })
+    expect(container.textContent).toContain('offline')
+    expect(container.textContent).toContain(initial.question)
+    expect(buttonByText(container, '关联侧问').disabled).toBe(false)
+    expect(controller.activateTab).not.toHaveBeenCalled()
   })
 
   it('opens a history record and routes archive and restore to the same child', async () => {
@@ -264,14 +241,16 @@ describe('Sidecar Better Sidebar tabs', () => {
   it('does not mount a native surface while the tab is hidden', async () => {
     const controller = makeController(makeSnapshot({ 'parent-1': [record()] }))
     const meta = activeSidecarTabMeta(record())
+    const renderConversation = vi.fn(() => null)
     await render(
       <SidecarChatTab
         controller={asController(controller)}
+        renderConversation={renderConversation}
         {...chatProps(controller, meta, { visible: false })}
       />,
     )
 
-    expect(controller.mountNativeSurface).not.toHaveBeenCalled()
+    expect(renderConversation).not.toHaveBeenCalled()
   })
 
   it('shows a retry action when the history list fails to load', async () => {
@@ -284,4 +263,28 @@ describe('Sidecar Better Sidebar tabs', () => {
     await act(async () => { buttonByText(container, '重试').click(); await Promise.resolve() })
     expect(controller.load).toHaveBeenCalledWith('parent-1')
   })
+})
+
+it('offers new sidecars from both empty and populated history', async () => {
+  for (const records of [[], [record()]]) {
+    const controller = makeController(makeSnapshot({ 'parent-1': records }))
+    const container = await render(<SidecarHistoryTab controller={asController(controller)} {...chatProps(controller, activeSidecarTabMeta(record()))} />)
+    await act(async () => { buttonByText(container, '新建侧问').click() })
+    expect(controller.newFromHistory).toHaveBeenCalledWith('parent-1')
+  }
+})
+it('keeps independent session creation separate from access mode', async () => {
+  const controller = makeController()
+  const meta = draftSidecarTabMeta('parent-1', 'parent-1:selection:request-1', draft())
+  const container = await render(<SidecarChatTab controller={asController(controller)} {...chatProps(controller, meta)} />)
+  await act(async () => { buttonByText(container, '独立新会话').click() })
+  expect(controller.updateDraft).toHaveBeenCalledWith('parent-1', 'parent-1:selection:request-1', expect.objectContaining({ creationMode: 'independent', accessMode: 'read-only' }))
+})
+
+it('sorts active history before archived records without mutating persisted order', async () => {
+  const records = [record({ childSessionId: 'old', title: 'old', updatedAt: 1 }), record({ childSessionId: 'archived', title: 'archived', status: 'archived', updatedAt: 3 }), record({ childSessionId: 'recent', title: 'recent', updatedAt: 2 })]
+  const controller = makeController(makeSnapshot({ 'parent-1': records }))
+  const container = await render(<SidecarHistoryTab controller={asController(controller)} {...chatProps(controller, undefined)} />)
+  expect([...container.querySelectorAll('article strong')].map(e => e.textContent)).toEqual(['recent', 'old', 'archived'])
+  expect(records.map(r => r.childSessionId)).toEqual(['old', 'archived', 'recent'])
 })
