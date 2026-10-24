@@ -12,7 +12,7 @@ type Sessions = Parameters<Parameters<WorkspaceBrowserProps['useSessions']>[0]>[
 type Workspaces = Parameters<Parameters<WorkspaceBrowserProps['useWorkspaces']>[0]>[0]
 
 /** Read-only projection of DSH's existing Workspace view preferences. No second persisted order. */
-export function workspaceOrder(list: Sessions, workspaces: Workspaces, view: View): string[] {
+export function workspaceOrder(list: Sessions, workspaces: Workspaces, view: View, includeHidden = false): string[] {
   const archived = new Set<string>(workspaces.archivedSessionIds)
   const pinned = new Set<string>(workspaces.pinnedSessionIds)
   const current = Object.values(list.byId).find(s => (s.retainedBy.mainView ?? 0) > 0)
@@ -40,14 +40,15 @@ export function workspaceOrder(list: Sessions, workspaces: Workspaces, view: Vie
       }
       for (const id of ordinary.toReversed()) placeFork(id)
     }
-    const rows = ids.filter(visible)
+    const rows = ids.filter(includeHidden ? id => !!known(id) : visible)
     return [
       ...rows.filter(id => known(id)!.blank),
       ...rows.filter(id => !known(id)!.blank && pinned.has(id) && !archived.has(id)),
       ...rows.filter(id => !known(id)!.blank && (!pinned.has(id) || archived.has(id))),
+      ...(includeHidden ? members.filter(id => !known(id)) : []),
     ]
   }
-  if (view.groupBy === 'flat') return order(list.ids.filter(visible), '__flat_session_order__')
+  if (view.groupBy === 'flat') return order(includeHidden ? list.ids : list.ids.filter(visible), '__flat_session_order__')
   const accounted = new Set(workspaces.items.flatMap(w => w.sessionIds))
   const groups = workspaces.items.map(w => ({ key: w.workspaceId, path: w.path, ids: order(w.sessionIds, w.workspaceId) }))
   // Native workspace trees render child folders before their parent's Session rows.

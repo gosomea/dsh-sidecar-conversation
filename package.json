@@ -1,6 +1,6 @@
 {
   "name": "dsh-sidecar-conversation",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Conversation-bound chats in the native DeepSeek Harness sidebar",
   "keywords": [
     "deepseek",

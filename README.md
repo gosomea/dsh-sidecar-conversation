@@ -4,19 +4,25 @@
 
 In DeepSeek Harness Web, select unfamiliar text and ask for an explanation in the native right sidebar. Follow-up questions and explanations stay in their own Session, without being written back into your main conversation. You can also ask about a whole turn or fork from an earlier point, with separate messages, drafts, model and permissions.
 
-[简体中文](./README.zh.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.4) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
+[简体中文](./README.zh.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.6) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
 
 ## Quick install
 
 With DSH Web already installed, run this command in the same environment and `DSH_HOME` you use to start it:
 
 ```sh
-dsh plugin --profile web add dsh-sidecar-conversation@0.2.4
+dsh plugin --profile web add dsh-sidecar-conversation@0.2.6
 ```
 
-Restart DSH Web and refresh the page. Keep your existing `DSH_HOME` to preserve conversations and Sidecar history. No DSH source changes or Better Sidebar installation are needed. Version `0.2.4` has been verified with official npm DSH `0.2.1-alpha.3`.
+Restart DSH Web and refresh the page. Keep your existing `DSH_HOME` to preserve conversations and Sidecar history. No DSH source changes or Better Sidebar installation are needed. Version `0.2.6` has been verified in an isolated, unmodified DSH `0.2.1-rc.3` host.
 
 Select text in a completed answer, or click “侧问这个回合”, then choose Fork or a references-only conversation and ask on the right.
+
+## 0.2.6: one unified sidebar
+
+Search, sibling drag ordering, pinning, archiving and collapsible Sidecar lineage share one list. Associated chats nest under their main Session; independent chats remain roots. Native stores own ordering and archive state, and dragging never reparents a chat. Full-text search follows the host’s native index configuration.
+
+[Implementation boundaries and verification](./docs/unified-sidebar-2026-10-25.md)
 
 ## Watch the 90-second demo
 
@@ -79,12 +85,12 @@ Messages, replies, attachments and tool events use native DSH Session capabiliti
 
 ## Check DSH compatibility before installation
 
-Version `0.2.4` runs against the unmodified npm DSH `0.2.1-alpha.3` APIs. No DSH source patch or Better Sidebar installation is required:
+Version `0.2.6` uses public DSH APIs and its unified list was verified against unmodified DSH `0.2.1-rc.3`. No DSH source patch or Better Sidebar installation is required:
 
 - `sidebar.session.row.leading` / `sidebar.session.row.hover`: existing public row decorations; titles remain native.
-- `sidebar.workspaces` / `shell.overlay`: the public slot ledger supplies the existing root view-store handle; the plugin reads preferences without copying persistence or replacing the browser.
+- `sidebar.workspaces` / `shell.overlay`: the public slot ledger supplies the existing root view-store handle; the plugin renders the unified list and reuses native preferences and ordering actions, without a second order store.
 
-All Sidecar extensions live in the plugin; no DSH source patch or custom `uiWorkspace.sessionOrder` / `sidebar.workspaces.session.title` service is needed. A public sidebar slot supplies a collapsible Session tree from the plugin registry, including on rc.3 where ordinary Fork logs omit parent links. Independent chats remain roots. Native titles, order data, composer and session logs remain authoritative. Switch to “原生列表” / “管理” for the complete native workspace management, full-text search and drag ordering, then “会话层级” to return. [Full compatibility details](./docs/compatibility.md)
+All Sidecar extensions live in the plugin; no DSH source patch or custom `uiWorkspace.sessionOrder` / `sidebar.workspaces.session.title` service is needed. A public sidebar slot supplies a collapsible Session tree from the plugin registry, including on rc.3 where ordinary Fork logs omit parent links. Independent chats remain roots. Native titles, order data, composer and session logs remain authoritative. One unified list provides search, sibling drag ordering, pinning, archiving and collapsible lineage. Ordering and archive filters use the native view store; dragging never reparents a chat. Search respects native configuration: titles and workspaces by default, message content when the native full-text index is enabled. [Full compatibility details](./docs/compatibility.md)
 
 To develop from source, install a locally built plugin through a DSH Web profile:
 

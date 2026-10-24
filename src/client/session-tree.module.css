@@ -13,3 +13,10 @@
 .count, .empty { color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .group { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; padding: 12px 4px 6px; font-size: 12px !important; opacity: .7; }
 .running { color: var(--dsw-alias-label-link, #679cff); }
+
+.filters { display: flex; gap: 4px; margin-bottom: 6px; }
+.filters select { min-width: 0; flex: 1; font: inherit; font-size: 11px; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-background-primary, transparent); border: 1px solid var(--dsw-alias-border-primary, #8885); border-radius: 6px; padding: 4px 0; }
+.snippet { display: block; overflow: hidden; text-overflow: ellipsis; color: var(--dsw-alias-label-secondary); font-size: 11px; margin-top: 3px; }
+.row[data-drop=before] { box-shadow: 0 -2px var(--dsw-alias-label-link, #679cff); }
+.row[data-drop=after] { box-shadow: 0 2px var(--dsw-alias-label-link, #679cff); }
+.row[draggable=true] { cursor: grab; }
