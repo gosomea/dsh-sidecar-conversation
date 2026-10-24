@@ -6,6 +6,10 @@
 
 原 0.1 实现不能直接在本次新版基线上运行：`effectiveApprovalPolicy` 导出已移除；旧 detached/mountSurface API 不再适用；把子 Session 原生归档以隐藏它会被 archived-session gate 阻止执行。现已替换审批查询与客户端挂载，并保持子 Session 原生未归档。
 
+## 标题与原生顺序扩展
+
+标题与顺序同步需要目标 DSH 提供 `uiWorkspace.sessionOrder` 和 `sidebar.workspaces.session.title`，这两项是本地 ui-workspace 扩展，不随插件 npm 包发布。普通 `0.2.1-alpha.3` 版本号本身不能证明这些能力存在。完整验证和原生 Web 检查边界见[标题与顺序同步记录](./title-order-2026-10-24.md)。
+
 ## 2026-10-24 当前验收
 
 已部署到日常 3080；本轮回归没有重启或再次部署。选区与整回合入口、切换主会话、关闭重开、刷新、已发送引用跳转和新侧问焦点均通过；135 项测试及类型检查通过。718 个日常会话保留，740 个会话文件哈希不变。详见[回归记录](./regression-2026-10-24.md)和[原生 session log](./native-session-log.md)。

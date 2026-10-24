@@ -11,6 +11,9 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export class SidecarApi {
+  async catalog(): Promise<SidecarRecord[]> {
+    return (await json<{ items: SidecarRecord[] }>('/catalog')).items
+  }
   async serializeReference(reference: import('../core/references.js').SidecarReference): Promise<string> {
     return (await json<{ text: string }>('/reference', { method: 'POST', body: JSON.stringify(reference) })).text
   }

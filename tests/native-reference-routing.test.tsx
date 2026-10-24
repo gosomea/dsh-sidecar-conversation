@@ -1,3 +1,4 @@
+import { createSnapshotStore } from './snapshot-fixture.js'
 /* @vitest-environment jsdom */
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -19,7 +20,8 @@ afterEach(() => { cleanup.splice(0).forEach(f => f()); localStorage.clear() })
 const draft = { sourceKind: 'turn' as const, sourceMessageId: 'source', sourceSeq: 3, quote: '', question: 'keep this question', accessMode: 'read-only' as const }
 function setup(active = false) {
   const controller = new SidecarController()
-  const records: any[] = active ? [{ parentSessionId: 'parent', childSessionId: 'child', requestKey: 'b', sourceKind: 'turn', status: 'active', access: { mode: 'read-only' } }] : []
+  vi.spyOn(controller.api, 'catalog').mockResolvedValue([])
+  const records: any[] = active ? [{ parentSessionId: 'parent', childSessionId: 'child', requestKey: 'b', title: 'old title', sourceKind: 'turn', status: 'active', access: { mode: 'read-only' } }] : []
   controller.store.setRecords('parent', records)
   const saved = Object.fromEntries(['a', 'b'].map((key, index) => [sidecarTabId(key), {
     id: sidecarTabId(key), type: SIDECAR_CHAT_TAB_TYPE, sessionId: 'parent', title: key, usedAt: index,
@@ -30,9 +32,10 @@ function setup(active = false) {
   const insertReference = vi.fn(() => true)
   const input = { insertReference, focus: vi.fn() }
   const ctx: any = {
+    uiWorkspace: { sessionOrder: createSnapshotStore<readonly string[]>([]) },
     get: () => ({ registerSource: () => () => {} }),
     uiConversation: { userText: { register: () => () => {} } },
-    sessions: { using: async (_id: string, _options: unknown, f: any) => f({ ready: Promise.resolve({ ctx: {} }) }) },
+    sessions: { list: createSnapshotStore<any>({ ids: [], byId: {} }), using: async (_id: string, _options: unknown, f: any) => f({ ready: Promise.resolve({ ctx: {} }) }) },
     conversation: { input: { for: () => input } },
     sidebarRightTabs: { register: () => () => {} },
     sidebarRight: { mounted: { getSnapshot: () => 'parent' }, openResourceIn: vi.fn(), openTabIn: vi.fn(), tabsIn: () => active ? [{ contentId: 'dsh-resource://sidecar/' + encodeURIComponent(sidecarTabId('b')) }] : [], closeIn: vi.fn() },

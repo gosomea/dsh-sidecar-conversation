@@ -28,7 +28,7 @@ export function quoteTitle(quote: string, sourceKind: 'selection' | 'turn' = 'se
 /** Stable topic label from the first question, without multiline whitespace or split emoji. */
 export function questionTitle(question: string): string {
   const chars = Array.from(normalizeWhitespace(question).replace(/\s+/g, ' '))
-  return `↳ 侧问 · ${chars.slice(0, 28).join('')}${chars.length > 28 ? '…' : ''}`
+  return `${chars.slice(0, 28).join('')}${chars.length > 28 ? '…' : ''}`
 }
 
 export function wrapFirstQuestion(quote: string, question: string, sourceKind: 'selection' | 'turn' = 'selection'): string {

@@ -233,7 +233,7 @@ export class SidecarRegistry {
     return this.mutate(records => {
       const record = records.find(item => item.childSessionId === childSessionId)
       if (!record?.nativeComposer) throw new Error('not a native Sidecar')
-      if (!record.firstQuestion) { record.firstQuestion = question; record.title = title }
+      if (!record.firstQuestion) { record.firstQuestion = question; if (record.title === '新侧问') record.title = title }
       record.updatedAt = Date.now()
       return cloneRecord(record)
     })

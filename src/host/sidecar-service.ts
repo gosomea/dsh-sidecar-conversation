@@ -237,12 +237,13 @@ export class SidecarService {
 
   async noteNativeEvent(child: string, event: HistoryEvent): Promise<void> {
     const record = this.registry.getByChild(child)
-    if (!record?.nativeComposer) return
+    if (!record) return
     if (event.type === 'session/title') {
       const data = event.data as { title?: string }
       if (data?.title && data.title !== record.title) await this.registry.setTitle(child, data.title)
       return
     }
+    if (!record.nativeComposer) return
     const data = event.data as { source?: { kind?: string }; message?: { source?: { kind?: string } } } | undefined
     if (event.type !== 'user/message' || (data?.source ?? data?.message?.source)?.kind !== 'user') return
     const question = referenceQuestion(userMessageText(event) ?? '') || '附件侧问'

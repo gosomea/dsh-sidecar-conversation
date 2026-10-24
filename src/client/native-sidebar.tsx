@@ -1,3 +1,6 @@
+import { nativeTitle, plainTitle } from './presentation.js'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { SessionRowOwnerProps } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-session-turn-outline/client'
 import { ForkContext, forkProgress } from './components/ForkContext.js'
 import type { InputActions } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -26,12 +29,33 @@ type SavedTab = BetterSidebarTab & { sessionId: string; usedAt?: number }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
+    'sidebar.workspaces.session.title': { kind: 'single'; scope: 'root'; owner: SessionRowOwnerProps }
     'sidecar.conversation': { kind: 'single'; scope: 'session' }
   }
 }
 
 /** Adapts the plugin's tab lifecycle to DSH's session-owned native dock. */
 export function registerNativeSidebar(ctx: Context, controller: SidecarController): () => void {
+  // This capability is owned by the locally adapted native Workspace plugin.
+  const nativeOrder = (ctx.uiWorkspace as typeof ctx.uiWorkspace & { sessionOrder: ObservableSnapshot<readonly SessionId[]> }).sessionOrder
+  if (!nativeOrder) throw new Error('侧问需要原生 Workspace 的会话排序接口，请更新 DSH 构建')
+  const sessions = ctx.sessions.list
+  let disposed = false
+  let catalogIds = ''
+  const refreshCatalog = () => {
+    const ids = sessions.getSnapshot().ids.join('|')
+    if (ids === catalogIds) return
+    catalogIds = ids
+    void controller.api.catalog().then(records => {
+      if (disposed) return
+      const parents = new Set(records.map(record => record.parentSessionId))
+      for (const parent of parents) {
+        if (controller.store.getSnapshot().recordsByParent[parent] === undefined) controller.store.setRecords(parent, records.filter(record => record.parentSessionId === parent))
+      }
+    }).catch(error => { if (!disposed) { catalogIds = ''; controller.store.setError(error) } })
+  }
+  refreshCatalog()
+  const stopCatalog = sessions.subscribe(refreshCatalog)
   let saved: Record<string, SavedTab> = {}
   try {
     const value: unknown = JSON.parse(localStorage.getItem(STORAGE) ?? '{}')
@@ -103,7 +127,7 @@ export function registerNativeSidebar(ctx: Context, controller: SidecarControlle
     if (!target) return undefined
     const meta = parseSidecarTabMeta(target.meta)!
     const record = controller.store.records(parent).find(r => r.requestKey === meta.requestKey)
-    const title = meta.kind === 'draft' ? (meta.draft.question.trim() ? questionTitle(meta.draft.question) : '新侧问') : (record?.title ?? target.title)
+    const title = meta.kind === 'draft' ? (meta.draft.question.trim() ? questionTitle(meta.draft.question) : '新侧问') : (record ? nativeTitle(record, sessions.getSnapshot()) : target.title)
     return { id: target.id, title: title.replace(/^↳\s*侧问\s*·\s*/, '') }
   }
   controller.referenceTarget = async (parent, draft, targetId) => {
@@ -133,7 +157,7 @@ export function registerNativeSidebar(ctx: Context, controller: SidecarControlle
       })
     }
   }
-  const disposers = [disposeBinding, ctx.sidebarRight.openTabs?.subscribe(() => controller.targetsChanged()) ?? (() => {}), registerReferences(ctx, controller), () => { controller.referenceTarget = undefined; controller.recentTarget = undefined }]
+  const disposers = [() => { disposed = true; stopCatalog() }, disposeBinding, ctx.sidebarRight.openTabs?.subscribe(() => controller.targetsChanged()) ?? (() => {}), registerReferences(ctx, controller), () => { controller.referenceTarget = undefined; controller.recentTarget = undefined }]
   disposers.push(ctx.sidebarRightTabs.register({
     id: SIDECAR_CHAT_TAB_TYPE, kind: SIDECAR_CHAT_TAB_TYPE, title: value => saved[decodeURIComponent(value.slice(PREFIX.length))]?.title ?? '新侧问', patterns: [PREFIX + '**'], keepMounted: true,
   }))
@@ -233,24 +257,37 @@ export function registerNativeSidebar(ctx: Context, controller: SidecarControlle
   function Title({ useTabInfo }: PropsRuntime<'sidebar.right.pane.tab.title'>) {
     useSyncExternalStore(subscribe, () => revision)
     const snapshot = useSyncExternalStore(controller.store.subscribe, controller.store.getSnapshot)
+    const nativeSessions = useSyncExternalStore(sessions.subscribe, sessions.getSnapshot)
     const { tab } = useTabInfo()
     const stored = saved[decodeURIComponent(tab.contentId.slice(PREFIX.length))]
     const meta = parseSidecarTabMeta(stored?.meta)
     const record = meta === undefined ? undefined : snapshot.recordsByParent[meta.parentSessionId]?.find(item => item.requestKey === meta.requestKey)
     const draftTitle = meta?.kind === 'draft' ? (meta.draft.question.trim() ? questionTitle(meta.draft.question) : '新侧问') : undefined
-    const title = (record?.title ?? draftTitle ?? stored?.title ?? '新侧问').replace(/^↳\s*侧问\s*·\s*/, '')
+    const title = plainTitle(record ? nativeTitle(record, nativeSessions) : draftTitle ?? stored?.title ?? '新侧问')
     return <span title={title}>{title}</span>
   }
   disposers.push(ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab.title', key: SIDECAR_CHAT_TAB_TYPE,
   }, Title)))
   function History({ sessionId, useTabInfo }: PropsRuntime<'sidebar.right.pane.tab'>) {
+    const nativeSessions = useSyncExternalStore(sessions.subscribe, sessions.getSnapshot)
+    const order = useSyncExternalStore(nativeOrder.subscribe, nativeOrder.getSnapshot)
     const { tab } = useTabInfo()
     return <SidecarHistoryTab ctx={ctx} store={null} scope={{ sessionId: String(sessionId) }}
-      tab={{ id: tab.id, type: SIDECAR_HISTORY_TAB_TYPE, title: '侧问历史' }} visible={tab.visible} controller={controller} />
+      tab={{ id: tab.id, type: SIDECAR_HISTORY_TAB_TYPE, title: '侧问历史' }} visible={tab.visible} controller={controller} sessions={nativeSessions} sessionOrder={order} />
   }
   disposers.push(ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab', key: SIDECAR_HISTORY_TAB_TYPE,
   }, History)))
+  function RowTitle({ sessionId, displayTitle }: PropsRuntime<'sidebar.workspaces.session.title'>) {
+    const snapshot = useSyncExternalStore(controller.store.subscribe, controller.store.getSnapshot)
+    const record = Object.values(snapshot.recordsByParent).flat().find(item => item.childSessionId === sessionId)
+    if (!record) return <>{displayTitle}</>
+    const title = plainTitle(displayTitle)
+    return <>{record.creationMode !== 'independent' && <span aria-hidden="true">↳ 侧问 · </span>}{title}</>
+  }
+  disposers.push(ctx.slots.inject('sidebar.workspaces.session.title', () => ctx.slots.register({
+    name: 'sidebar.workspaces.session.title',
+  }, RowTitle)))
   return () => { for (const dispose of disposers.reverse()) dispose() }
 }

@@ -1,3 +1,5 @@
+import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
+import { nativeHistory, nativeTitle } from '../presentation.js'
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -13,11 +15,9 @@ const ACTIVE_SIDECAR_WARNING = 20
 
 interface SidecarTabProps extends BetterSidebarTabComponentProps {
   controller: SidecarController
+  sessions?: SessionListState
+  sessionOrder?: readonly string[]
   renderConversation?: (record: SidecarRecord) => ReactNode
-}
-
-function displayTitle(record: SidecarRecord): string {
-  return record.title.replace(/^↳\s*侧问\s*·\s*/, '')
 }
 
 function DraftSidecar({ controller, parentSessionId, requestKey, initialDraft, visible }: {
@@ -123,7 +123,7 @@ export function SidecarChatTab({ controller, scope, tab, visible, renderConversa
   return <InvalidTab message="未找到这个侧问的持久化记录，请从侧问历史重新打开。" />
 }
 
-export function SidecarHistoryTab({ controller, scope }: SidecarTabProps) {
+export function SidecarHistoryTab({ controller, scope, sessions, sessionOrder = [] }: SidecarTabProps) {
   const snapshot = useSyncExternalStore(
     controller.store.subscribe,
     controller.store.getSnapshot,
@@ -175,11 +175,11 @@ export function SidecarHistoryTab({ controller, scope }: SidecarTabProps) {
       当前主会话已有 {activeCount} 个活动侧问，建议归档不再使用的对话。
     </div>}
     <div className={css.historyList}>
-      {[...records].sort((a, b) => Number(a.status === 'archived') - Number(b.status === 'archived') || b.updatedAt - a.updatedAt).map(record => <article key={record.childSessionId} className={css.historyItem} data-archived={record.status === 'archived'}>
+      {nativeHistory(records, sessionOrder).map(record => <article key={record.childSessionId} className={css.historyItem} data-archived={record.status === 'archived'}>
         <button type="button" className={css.historyMain} onClick={() => { controller.openRecord(record) }}>
-          <strong>{displayTitle(record)}</strong>
+          <strong>{nativeTitle(record, sessions)}</strong>
           <span>{record.creationMode === 'independent' ? '独立新会话' : 'Fork'}{record.status === 'archived' ? ' · 已归档' : ''}</span>
-          <time dateTime={new Date(record.updatedAt).toISOString()}>{new Date(record.updatedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time>
+          <time dateTime={new Date(sessions?.byId[record.childSessionId as import('@deepseek-ai/dsh-session/types').SessionId]?.updatedAt ?? record.updatedAt).toISOString()}>{new Date(sessions?.byId[record.childSessionId as import('@deepseek-ai/dsh-session/types').SessionId]?.updatedAt ?? record.updatedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time>
         </button>
         <Button
           size="sm"

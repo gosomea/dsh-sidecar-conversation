@@ -281,10 +281,10 @@ it('keeps independent session creation separate from access mode', async () => {
   expect(controller.updateDraft).toHaveBeenCalledWith('parent-1', 'parent-1:selection:request-1', expect.objectContaining({ creationMode: 'independent', accessMode: 'read-only' }))
 })
 
-it('sorts active history before archived records without mutating persisted order', async () => {
+it('uses the native sidebar order without mutating persisted order', async () => {
   const records = [record({ childSessionId: 'old', title: 'old', updatedAt: 1 }), record({ childSessionId: 'archived', title: 'archived', status: 'archived', updatedAt: 3 }), record({ childSessionId: 'recent', title: 'recent', updatedAt: 2 })]
   const controller = makeController(makeSnapshot({ 'parent-1': records }))
-  const container = await render(<SidecarHistoryTab controller={asController(controller)} {...chatProps(controller, undefined)} />)
+  const container = await render(<SidecarHistoryTab sessionOrder={['recent', 'old', 'archived']} controller={asController(controller)} {...chatProps(controller, undefined)} />)
   expect([...container.querySelectorAll('article strong')].map(e => e.textContent)).toEqual(['recent', 'old', 'archived'])
   expect(records.map(r => r.childSessionId)).toEqual(['old', 'archived', 'recent'])
 })

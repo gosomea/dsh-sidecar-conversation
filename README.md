@@ -22,9 +22,13 @@ A compact Fork row links the fork turn, lag count and latest parent turn; append
 
 Menu-created chats start read-only and can be changed through DSH's native permission picker. Read-only restricts workspace writes, not network access; Sidecars share the source workspace, so tools with write access can change the same files. The plugin does not automatically send replies back to the parent.
 
-Sidecar titles use the first question's summary and preserve native custom names. Plugin archival changes Sidecar history status; native Sessions stay unarchived so they can run. Independent Sessions also appear in the source Session's Sidecar history, without establishing native parentage.
+Initial titles use the first question’s summary. The native Session title then drives the left row, right tab and history; renames update all three. The left Fork prefix `↳ 侧问 ·` is a display decoration that survives renaming, with legacy prefixes normalized only for display. History uses the native sidebar order, including manual ordering, recency, pins and grouping.
+
+Plugin archival changes Sidecar history status; native Sessions stay unarchived so they can run. Independent Sessions also appear in the source Session's Sidecar history, without establishing native parentage.
 
 ## Installation and development
+
+Title decoration and shared ordering require the local ui-workspace `sidebar.workspaces.session.title` slot and `sessionOrder` service. These extensions must accompany the plugin when upgrading DSH.
 
 Install local source in an environment matching the target DSH version:
 
@@ -47,6 +51,7 @@ Messages, replies, attachments and tool events use native DSH Session capabiliti
 
 - [Native session logs: ownership, references and upgrade boundaries](./docs/native-session-log.md)
 - [2026-10-24 regression: both entry points, switching, reopening and refresh](./docs/regression-2026-10-24.md)
+- [Title and order synchronization validation](./docs/title-order-2026-10-24.md)
 - [Architecture](./docs/architecture.md) and [development](./docs/development.md)
 
 ## License

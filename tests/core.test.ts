@@ -71,8 +71,8 @@ describe('history merge', () => {
 })
 
 it('labels a sidecar from its first question without splitting emoji', () => {
-  expect(questionTitle(' 为什么\n 会这样？ ')).toBe('↳ 侧问 · 为什么 会这样？')
-  expect(questionTitle('😀'.repeat(30))).toBe('↳ 侧问 · ' + '😀'.repeat(28) + '…')
+  expect(questionTitle(' 为什么\n 会这样？ ')).toBe('为什么 会这样？')
+  expect(questionTitle('😀'.repeat(30))).toBe('😀'.repeat(28) + '…')
 })
 
  it('accepts browser layout whitespace without accepting changed words', () => {

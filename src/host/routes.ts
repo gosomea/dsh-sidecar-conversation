@@ -46,6 +46,9 @@ function route(
 
 export function registerRoutes(webServer: WebServer, service: SidecarService, broker: SidecarSseBroker): () => void {
   const disposers = [
+    webServer.register({ kind: 'exact', path: `${SIDECAR_API_PREFIX}/catalog`, handler: route('GET', (_req, res) => {
+      sendJson(res, 200, { items: service.registry.all() })
+    }) }),
     webServer.register({ kind: 'exact', path: `${SIDECAR_API_PREFIX}/prepare`, handler: route('POST', async (req, res) => {
       sendJson(res, 200, { record: await service.prepare(await readJson<CreateSidecarInput>(req)) })
     }) }),
