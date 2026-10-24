@@ -21,7 +21,7 @@ import type { SidecarDraft, SidecarRecord } from '../src/core/types.js'
 // The production primitives import their CSS through the package's published
 // source entry. Keep these component tests focused on tab behavior and avoid
 // coupling the jsdom runner to the primitives' CSS loader.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', async importOriginal => ({ ...await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>(),
   Button: (props: { children?: unknown; [key: string]: unknown }) =>
     createElement('button', props, props.children),
   ReferenceChip: ({ label, onActivate, title }: any) => createElement(onActivate ? 'button' : 'span', { onClick: onActivate, title }, label),

@@ -33,7 +33,7 @@ function fixture(failure = false) {
     sessions: { retain, list },
     sidebarRightTabs: { register: vi.fn(() => unregister) },
     sidebarRight: { mounted: { getSnapshot: () => 'parent' }, openResourceIn: vi.fn(), openTabIn: vi.fn(), tabsIn: () => [], closeIn: vi.fn() },
-    slots: { inject: (_name: string, f: () => any) => f(), entriesOfSlot: () => [{ store: handle }], subscribe: () => vi.fn(), register: (options: any, component: any) => { entries.push({ options, component }); return vi.fn() } },
+    slots: { entries: () => [], inject: (_name: string, f: () => any) => f(), entriesOfSlot: () => [{ store: handle }], subscribe: () => vi.fn(), register: (options: any, component: any) => { entries.push({ options, component }); return vi.fn() } },
   }
   const controller = { api: { catalog: vi.fn(async () => []) }, targetsChanged: vi.fn(), store: new SidecarClientStore(), bindSidebar: (s: any) => { service = s; return vi.fn() } }
   const dispose = registerNativeSidebar(ctx as unknown as Context, controller as unknown as SidecarController)
@@ -101,7 +101,7 @@ it('updates the native tab title when a draft question changes', () => {
   expect(el.textContent).toBe('Revised question')
 })
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({ ReferenceChip: () => null }))
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', async importOriginal => ({ ...await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>(), ReferenceChip: () => null }))
 
 it('restores legacy tabs as metadata without opening or focusing a native pane', () => {
   const f = fixture()

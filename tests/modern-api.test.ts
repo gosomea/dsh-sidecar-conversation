@@ -22,8 +22,20 @@ describe('current Session Controller boundary', () => {
 
 it('creates a root Session in the source workspace without copying history', async () => {
   const create = vi.fn(async () => ({ sessionId: 'new' }))
-  const inspect = vi.fn(async () => ({ meta: { cwd: '/test' }, events: [{ type: 'assistant/message' }] }))
-  const api = modernSidecarHostApi({ sessionController: { create, inspect }, workspaceRegistry: { list: () => [{ id: 'workspace', sessionIds: ['parent'] }] } } as unknown as Context)
+  const readSession = vi.fn(async () => ({ session: { cwd: '/test' }, events: [{ type: 'assistant/message' }] }))
+  const api = modernSidecarHostApi({ sessionController: { create }, sessionQuery: { readSession }, workspaceRegistry: { list: () => [{ id: 'workspace', sessionIds: ['parent'] }] } } as unknown as Context)
   await api.sessions.createIndependent({ payload: { parentSessionId: 'parent', sessionId: 'new' } } as never)
   expect(create).toHaveBeenCalledWith({ sessionId: 'new', workspaceId: 'workspace' })
+  expect(readSession).toHaveBeenCalledWith('parent')
+})
+
+it('reads native log events without the removed Controller inspect API or activating an Agent', async () => {
+  const events = [{ seq: 1, type: 'assistant/message', data: { text: 'source' } }]
+  const readSession = vi.fn(async () => ({ session: { cwd: '/test' }, events }))
+  const resolveAgent = vi.fn()
+  const api = modernSidecarHostApi({ sessionQuery: { readSession }, sessionController: { resolveAgent } } as unknown as Context)
+  const response = await api.sessions.history({ rpcId: 'read', payload: { sessionId: 'parent', maxMessages: 100 } } as never)
+  expect(response).toEqual({ result: { ok: true, value: { events: events.map(event => ({ event })), hasMore: false } } })
+  expect(readSession).toHaveBeenCalledWith('parent')
+  expect(resolveAgent).not.toHaveBeenCalled()
 })

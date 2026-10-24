@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { SidecarAction } from '../src/client/components/SidecarAction.js'
 import { SidecarController } from '../src/client/controller.js'
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', async importOriginal => ({ ...await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>(),
   IconNewChatOutlineMedium: () => null,
   Tooltip: ({ children }: any) => children,
   Menu: ({ anchor, open, items, onSelect }: any) => createElement('div', null, anchor,

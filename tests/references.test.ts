@@ -33,4 +33,4 @@ describe('native message references', () => {
   })
 })
 
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({ ReferenceChip: () => null }))
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', async importOriginal => ({ ...await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>(), ReferenceChip: () => null }))

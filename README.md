@@ -43,7 +43,7 @@ Select text in a completed Assistant answer, or click “侧问这个回合” a
 | 从此回合 Fork | Inherit history through the selection's turn and attach its text reference | Inherit history through the turn and attach its turn reference |
 | 仅用选文新建／仅用此回合新建 (independent) | Start with only the selected text | Start with only that turn's final Assistant answer |
 
-Append appears only when the current main Session has a prepared Sidecar whose tab remains open. The menu therefore has two creation choices, or three choices including append. If the right dock is collapsed but the tab remains open, append reveals the target Sidecar. Closed tabs and unprepared drafts are not eligible targets.
+Append appears only when the current main Session has a prepared Sidecar whose tab remains open. Both menus have two creation choices, optionally preceded by append. The text-selection menu ends with “添加到主会话” (add to main Session), which inserts the same clickable reference into the native main composer without creating or switching a Sidecar. Drafts and sent citations retain exact-selection highlighting. If the right dock is collapsed but the tab remains open, append reveals the target Sidecar. Closed tabs and unprepared drafts are not eligible targets.
 
 The left menu determines the creation mode. Choosing a new chat prepares its Session and opens the native composer directly, without another mode choice or an automatic model call. The new draft contains only the current source and does not copy another Sidecar's selections.
 
@@ -84,7 +84,7 @@ Version `0.2.4` runs against the unmodified npm DSH `0.2.1-alpha.3` APIs. No DSH
 - `sidebar.session.row.leading` / `sidebar.session.row.hover`: existing public row decorations; titles remain native.
 - `sidebar.workspaces` / `shell.overlay`: the public slot ledger supplies the existing root view-store handle; the plugin reads preferences without copying persistence or replacing the browser.
 
-The custom `uiWorkspace.sessionOrder` and `sidebar.workspaces.session.title` extensions are no longer used. Native titles, the composer, references and session logs remain native. Parent/child row folding is a separate feature of customized DSH builds. [Full compatibility details](./docs/compatibility.md)
+All Sidecar extensions live in the plugin; no DSH source patch or custom `uiWorkspace.sessionOrder` / `sidebar.workspaces.session.title` service is needed. A public sidebar slot supplies a collapsible Session tree from the plugin registry, including on rc.3 where ordinary Fork logs omit parent links. Independent chats remain roots. Native titles, order data, composer and session logs remain authoritative. Switch to “原生列表” / “管理” for the complete native workspace management, full-text search and drag ordering, then “会话层级” to return. [Full compatibility details](./docs/compatibility.md)
 
 To develop from source, install a locally built plugin through a DSH Web profile:
 
@@ -101,8 +101,9 @@ Restart the target Web instance after installation. `--dump-config` proves compo
 
 ## Validation records
 
-The plugin passes 153 tests and TypeScript checks; its release tarball passed an independent build, entry checks, clean installation and Host-entry import. Browser and real-model coverage are recorded separately below:
+The plugin passes 176 tests and TypeScript checks; its release tarball passed an independent build, entry checks, clean installation and Host-entry import. Browser and real-model coverage are recorded separately below:
 
+- [Native Markdown/table selection validation and full reference-flow regression](./docs/markdown-reference-2026-10-24.md)
 - [Menu order and verification](./docs/release-0.2.4.md)
 - [Exact selection highlighting and native permission presets](./docs/release-0.2.3.md)
 - [Windows directory-fsync fix and Windows/Linux CI](./docs/release-0.2.2.md)

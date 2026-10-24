@@ -16,7 +16,7 @@
 
 顺序适配器从公开 slot ledger 取得 `sidebar.workspaces` 的共享 store handle，在同为 root scope 的 `shell.overlay` 注册一个无 UI 组件，由框架提供原生 `useStore`，结合 `useSessions`、`useWorkspaces` 计算历史顺序。插件不调用 handle.create、不读原生 localStorage key、不写原生偏好，也不维护第二份持久化排序。适配器对当前原生视图状态形状有版本依赖，升级 DSH 时需回归手动排序、置顶和分组。
 
-原生运行状态会优先替换行首箭头；归档原生行不显示箭头。未修改的官方 DSH 不提供 Session 父子折叠，插件不替换整个原生列表来模拟该功能。旧的本地定制 DSH 仍可保留它自己的折叠能力。`0.2.0` 的本地扩展硬依赖是发布兼容性错误，历史记录见[原验收](./title-order-2026-10-24.md)。
+原生运行状态会优先替换行首箭头；归档原生行不显示箭头。未修改的官方 DSH 原生列表不提供 Session 父子折叠。当前插件通过公开 `sidebar.workspaces` 插槽提供会话层级视图，关联关系来自插件索引；原生列表可随时切回。无需任何 DSH 源码定制。`0.2.0` 的本地扩展硬依赖是发布兼容性错误，历史记录见[原验收](./title-order-2026-10-24.md)。
 
 ## 2026-10-24 当前验收
 
@@ -60,7 +60,7 @@
 - 打包结构检查不等于从 tgz 安装后的端到端测试；真实 Host 使用 link 安装。
 - 未修改或重启日常 DSH；未发布 npm、未替日常 profile 安装此开发版本。
 
-## 原生列表折叠（同日后续验证）
+## 历史：原生列表折叠（已由插件内实现取代）
 
 隔离 DSH 的 ui-workspace 已加入按 parentId 折叠分叉会话：在分组视图中，侧问显示在可见父会话下面，箭头切换不改变当前会话，展开状态在浏览器中保存。置顶子会话、不可见父会话和跨分组父子保留独立行；搜索和平铺视图不嵌套。这是 DSH 原生源码改动，单独安装此插件包不会带来列表折叠。隔离环境已完整重建为 `0.2.1-alpha.3-01bac39-dirty`；日常 3080 产物未重建。工作区 467 项测试、build:artifacts 与 build:check 通过；doc-sync 为 42 通过、1 失败，失败来自未改动的 python/sdk/uv.lock:113 提交哈希引用。
 
@@ -77,3 +77,12 @@
 ## 0.2.3 原生权限与选文定位
 
 新增依赖是官方已发布的 `@deepseek-ai/dsh-permission-presets` 服务，不依赖本地定制 API。使用 DSH 原生预设身份、沙箱与审批事实，权限菜单与后续独立调整继续交给原生 Session。选文定位只使用公开渲染标记、DOM Range 和浏览器高亮 API；不修改 DSH 源码。验证范围见[0.2.3 记录](./release-0.2.3.md)。
+
+
+## 官方版左侧列表与 Windows
+
+官方 npm DSH `0.2.1-alpha.3` 使用平铺的左侧会话列表。关联 Fork 的原生 v4 header 仍保存 `parentSession`，插件索引也保留来源主会话；列表上的 `↳` 与来源悬浮提示不等同于缩进、折叠树。独立新会话没有原生父会话，保持顶层。
+
+本文早期父子行折叠、`aria-level` 为 2 的验收来自定制 DSH 构建，不能作为发布包证据。当前插件内实现的验证见[会话层级与主会话引用](./plugin-tree-main-reference-2026-10-24.md)；未复用那份定制源码。侧问历史与数据关系始终来自插件索引和原生会话日志。
+
+DSH `0.2.1-rc.3` 的[普通 Fork 升级说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/upgrade-guide/v0.2.1-rc.3/independent-session-forks/guide.zh.md)进一步取消新建普通 Fork 的原生 `parentSession`／`parentSessionId`，以及基于该字段的缩进。旧日志保持原字段。插件仍从自己的 registry 保存来源主会话及回合，所以“来源回合”和侧问历史不依赖此上游字段。遇到 Windows 平铺列表时，应同时核对 DSH 版本与是否使用定制客户端；仅凭操作系统不能判断数据关系是否丢失。

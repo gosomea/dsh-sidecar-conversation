@@ -121,4 +121,4 @@ it('derives selection identity from the mounted main message only', () => {
   row.insertAdjacentHTML('afterend', '<button data-sidecar-assistant-marker data-sidecar-session-id="parent-a" data-sidecar-message-id="same" data-sidecar-source-seq="8"></button>')
   expect(controller.selectedSource('selected text', row)?.parentSessionId).toBe('parent-a')
 })
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({ ReferenceChip: () => null }))
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', async importOriginal => ({ ...await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>(), ReferenceChip: () => null }))

@@ -23,7 +23,31 @@ export default defineConfig([
     fixedExtension: false,
     dts: false,
     clean: false,
-    deps: { neverBundle: [/^@deepseek-ai\//] },
+    treeshake: {
+      moduleSideEffects: false,
+      manualPureFunctions: ['memo', 'forwardRef', 'createContext'],
+    },
+    deps: {
+      // Include the public native Markdown projection without loading UI CSS in Node.
+      alwaysBundle: ['@deepseek-ai/dsh-client-ui-primitives'],
+      neverBundle: (id: string) => id.startsWith('@deepseek-ai/') && id !== '@deepseek-ai/dsh-client-ui-primitives',
+    },
+    plugins: [{
+      name: 'sidecar-host-native-markdown',
+      resolveId(source: string, importer: string | undefined) {
+        if (!source.endsWith('.css')) return null
+        return { id: `\0sidecar-host-css:${importer}:${source}.mjs`, moduleSideEffects: false }
+      },
+      load(id: string) {
+        return id.startsWith('\0sidecar-host-css:') ? 'export default {}' : null
+      },
+      transform(code: string, id: string) {
+        if (!id.replaceAll('\\', '/').endsWith('/@deepseek-ai/dsh-client-ui-primitives/lib/index.js')) return null
+        // Its public entry schedules a browser syntax-highlighter warmup. Only
+        // the synchronous text projection belongs in the Host bundle.
+        return { code: 'const setTimeout = () => ({ unref() {} });\n' + code, map: null }
+      },
+    }],
   },
   {
     name: `${pluginId}/client`,

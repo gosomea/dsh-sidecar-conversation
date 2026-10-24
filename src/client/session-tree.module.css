@@ -1,0 +1,15 @@
+.tree { color: var(--dsw-alias-label-primary); padding: 0 8px 12px; min-width: 0; }
+.toolbar { display: flex; align-items: center; gap: 4px; padding: 8px 0; }
+.toolbar > button { flex-shrink: 0; white-space: nowrap; }
+.toolbar input { min-width: 0; width: 100%; background: transparent; color: inherit; border: 1px solid var(--dsw-alias-border-primary, #8885); border-radius: 8px; padding: 7px; font: inherit; font-size: 12px; }
+.row { display: flex; align-items: center; min-height: 36px; border-radius: 9px; gap: 3px; }
+.row:hover, .row[data-selected=true] { background: var(--dsw-alias-interactive-bg-hover, #8882); }
+.title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; flex: 1; min-width: 0; padding: 8px 0; }
+.tree button { color: inherit; font: inherit; cursor: pointer; }
+.title, .fold, .actions, .group { border: 0; background: none; }
+.fold, .spacer { flex: 0 0 18px; width: 18px; }
+.fold { padding: 3px 0; }
+.actions { flex: 0 0 24px; opacity: .6; padding: 4px; }
+.count, .empty { color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.group { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; padding: 12px 4px 6px; font-size: 12px !important; opacity: .7; }
+.running { color: var(--dsw-alias-label-link, #679cff); }

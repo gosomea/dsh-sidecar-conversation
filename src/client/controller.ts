@@ -30,6 +30,14 @@ export class SidecarController {
     if (this.turnNavigator) void this.turnNavigator(parent, turn).catch(error => this.store.setError(error))
   }
   referenceTarget: ((parent: string, draft: SidecarDraft, targetId?: string) => Promise<void>) | undefined
+  mainReferenceTarget: ((reference: SidecarReference) => Promise<void>) | undefined
+  addToMain(parent: string, draft: SidecarDraft): void {
+    this.store.clearError()
+    const reference: SidecarReference = { parentSessionId: parent, sourceMessageId: draft.sourceMessageId,
+      sourceSeq: draft.sourceSeq, sourceKind: draft.sourceKind, quote: draft.quote,
+      ...(draft.sourceOffset === undefined ? {} : { textOffset: draft.sourceOffset }) }
+    if (this.mainReferenceTarget) void this.mainReferenceTarget(reference).catch(error => this.store.setError(error))
+  }
   referenceNavigator: ((reference: SidecarReference) => Promise<void>) | undefined
   addSource(parent: string, draft: SidecarDraft, targetId?: string): void {
     this.store.clearError()
@@ -65,7 +73,7 @@ export class SidecarController {
 
   async prepare(parentSessionId: string, requestKey: string, draft: SidecarDraft): Promise<void> {
     const record = await this.api.prepare({ parentSessionId, requestKey, sourceMessageId: draft.sourceMessageId,
-      sourceSeq: draft.sourceSeq, sourceKind: 'turn', creationMode: draft.creationMode ?? 'fork', quote: '', question: '', accessMode: draft.accessMode })
+      sourceSeq: draft.sourceSeq, sourceKind: draft.sourceKind, creationMode: draft.creationMode ?? 'fork', quote: draft.quote, question: '', accessMode: draft.accessMode })
     await this.load(parentSessionId)
     this.requireSidebar().updateTab(sidecarTabId(requestKey), {
       title: record.title, path: sidecarTabPath(requestKey),

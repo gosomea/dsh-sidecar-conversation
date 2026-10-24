@@ -9,7 +9,7 @@ import { draftSidecarTabMeta, sidecarTabId, SIDECAR_CHAT_TAB_TYPE } from '../src
 import type { Context } from '@deepseek-ai/cordis'
 ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
 // The host supplies UI primitives; this test exercises routing and native input actions.
-vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
+vi.mock('@deepseek-ai/dsh-client-ui-primitives', async importOriginal => ({ ...await importOriginal<typeof import('@deepseek-ai/dsh-client-ui-primitives')>(),
   Button: (props: { children?: import('react').ReactNode }) => createElement('button', props, props.children),
   ReferenceChip: ({ label, onActivate, title }: any) => createElement(onActivate ? 'button' : 'span', { onClick: onActivate, title }, label),
   IconCloseOutlineMedium: () => null,
@@ -33,12 +33,13 @@ function setup(active = false) {
   const input = { insertReference, focus: vi.fn() }
   const ctx: any = {
     get: () => ({ registerSource: () => () => {} }),
+    uiSession: { adapter: { current: createSnapshotStore({ key: 'parent' }) } },
     uiConversation: { userText: { register: () => () => {} } },
     sessions: { list: createSnapshotStore<any>({ ids: [], byId: {} }), using: async (_id: string, _options: unknown, f: any) => f({ ready: Promise.resolve({ ctx: {} }) }) },
     conversation: { input: { for: () => input } },
     sidebarRightTabs: { register: () => () => {} },
     sidebarRight: { mounted: { getSnapshot: () => 'parent' }, openResourceIn: vi.fn(), openTabIn: vi.fn(), tabsIn: () => active ? [{ contentId: 'dsh-resource://sidecar/' + encodeURIComponent(sidecarTabId('b')) }] : [], closeIn: vi.fn() },
-    slots: { entriesOfSlot: () => [], subscribe: () => () => {}, inject: (_: string, f: any) => f(), register: (options: any, component: any) => { entries.push({ options, component }); return () => {} } },
+    slots: { entries: () => [], entriesOfSlot: () => [], subscribe: () => () => {}, inject: (_: string, f: any) => f(), register: (options: any, component: any) => { entries.push({ options, component }); return () => {} } },
   }
   cleanup.push(registerNativeSidebar(ctx as Context, controller))
   return { controller, ctx, entries, insertReference }
@@ -69,4 +70,21 @@ it('does not silently create or redirect when the explicitly displayed target di
   const f = setup()
   await expect(f.controller.referenceTarget!('parent', draft, 'missing-tab')).rejects.toThrow('目标侧问已不可用')
   expect(f.ctx.sidebarRight.openResourceIn).not.toHaveBeenCalled()
+})
+
+it('adds to the main native input and persists without changing the sidecar', async () => {
+  const f = setup(true)
+  const component = f.entries.find(e => e.options.id === 'sidecar-main-reference').component
+  const actions = { captureInsertion: () => ({ start: 1, end: 3, draftRev: 7 }), persistDraft: vi.fn() }
+  const root = createRoot(document.createElement('div'))
+  act(() => root.render(createElement(component, { sessionId: 'parent', inputActions: actions })))
+  cleanup.unshift(() => act(() => root.unmount()))
+  const reference = { parentSessionId: 'parent', sourceMessageId: 'source', sourceSeq: 3, sourceKind: 'selection' as const, quote: 'table cell', textOffset: 5 }
+  await f.controller.mainReferenceTarget!(reference)
+  expect(f.insertReference).toHaveBeenCalledWith(expect.objectContaining({ ref: JSON.stringify(reference) }), { start: 3, end: 3, draftRev: 7 })
+  expect(actions.persistDraft).toHaveBeenCalledOnce()
+  expect(f.ctx.sidebarRight.openResourceIn).not.toHaveBeenCalled()
+  f.ctx.uiSession.adapter.current.set({ key: 'other-parent' })
+  await expect(f.controller.mainReferenceTarget!(reference)).rejects.toThrow('主会话已切换')
+  expect(f.insertReference).toHaveBeenCalledTimes(1)
 })

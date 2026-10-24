@@ -37,7 +37,7 @@ Registry 还保存初始选文、首问和初始权限快照，供标题、兼�
 
 | 适配边界 | 主要代码 | 验证重点 |
 | --- | --- | --- |
-| Session Controller 与工作区 | `src/host/modern-api.ts` | create/fork、cwd、inspect、rename、归档 gate 与运行恢复 |
+| Session Controller 与工作区 | `src/host/modern-api.ts` | create/fork、cwd、原生 Session Query 读日志、rename、归档 gate 与运行恢复 |
 | 原生聊天及输入框 | `src/client/native-sidebar.tsx` | retain/release、SessionProvider、输入 actions、首问与附件、草稿恢复 |
 | 引用协议与渲染 | `src/core/references.ts`、`src/client/references.tsx` | codec、UserText、消息 ID、分页、跳转高亮 |
 | 原生侧栏 | `src/client/native-sidebar.tsx` | 标签 inventory、主会话作用域、最近激活目标、关闭重开和焦点 |
@@ -52,3 +52,9 @@ Registry 还保存初始选文、首问和初始权限快照，供标题、兼�
 新建时通过 DSH `permissionPresets.set(session, 'read-only')` 写入原生预设身份和对应权限事实，不再组合只读沙箱与硬编码审批值。`inherit` 读取主会话当前的原生预设并在子会话设置一次；真正的 custom 状态没有可选预设，则复制有效沙箱与审批值。之后原生菜单、权限事件及投影继续控制该 Session，插件不持续同步主会话权限，也不批量修正旧 custom 会话。
 
 引用内容和文本偏移仍由原生 `user/message` 持久化，不迁移日志。点击选文后使用 DOM Range 与 CSS Custom Highlight，仅改变文字呈现；不替换 DSH 消息 DOM、不改写编辑器选区。旧记录没有偏移时，仅在来源文字可唯一定位时高亮；重复或失效的文字会提示重新选择，避免误指另一处。整个回合引用才对该回合的消息行做短暂高亮。
+
+## 主会话引用与插件层级
+
+“添加到主会话”使用相同的原生 `insertReference`、草稿持久化和 `sidecar_reference` 用户消息序列化；不会创建子 Session，也不另存聊天日志。定位使用来源 Session、消息 ID、序号和选文偏移，发送前后均复用精确高亮。
+
+左侧折叠树通过公开侧栏插槽实现，以插件 registry 的 parent/child 关联为准，不依赖 DSH rc.3 已删除的普通 Fork header 父链接。独立新会话不会嵌套；折叠与视图切换只持久化浏览器显示偏好。

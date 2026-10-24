@@ -142,5 +142,9 @@ export function SelectionOverlay({ controller }: Props) {
       onClick={() => { controller.openDraft(menu.parentSessionId, { ...selectedDraft, creationMode: 'independent', creationConfirmed: true }); close() }}>
       仅用选文新建
     </Button>
+    <Button size="sm" variant="ghost" className={css.action}
+      onClick={() => { controller.addToMain(menu.parentSessionId, selectedDraft); close() }}>
+      添加到主会话
+    </Button>
   </MenuSurface>
 }

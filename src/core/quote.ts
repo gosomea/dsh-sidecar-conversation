@@ -1,3 +1,4 @@
+import { extractMarkdownPlainText } from '@deepseek-ai/dsh-client-ui-primitives'
 import { MAX_QUESTION_LENGTH, MAX_QUOTE_LENGTH } from './types.js'
 
 export function normalizeWhitespace(value: string): string {
@@ -109,34 +110,9 @@ export function unwrapSidecarQuestion(text: string): {
   return { question: text }
 }
 
-/**
- * Approximate the selectable text produced by Harness' Markdown renderer.
- * Identity is still checked with Session + event seq + message id; this
- * conversion only prevents Markdown delimiters from invalidating a genuine
- * browser selection from that already-identified message.
- */
+/** Use the same GFM projection as DSH's native Markdown renderer. */
 export function markdownVisibleText(value: string): string {
-  const literals: string[] = []
-  const protect = (literal: string): string => {
-    const index = literals.push(literal) - 1
-    return `\uE000${index}\uE001`
-  }
-  let text = value
-    // Preserve escaped punctuation and code contents before removing Markdown
-    // delimiters. Users can legitimately select punctuation inside code.
-    .replace(/\\([\\`*_[\]{}()#+.!>|~-])/g, (_match, literal: string) => protect(literal))
-    .replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n([\s\S]*?)^ {0,3}\1[ \t]*$/gm,
-      (_match, _fence: string, body: string) => protect(body.replace(/\n$/, '')))
-    .replace(/(`+)([^`\n]*?)\1/g, (_match, _ticks: string, body: string) => protect(body))
-    .replace(/!\[([^\]]*)\]\([^\n)]*\)/g, '$1')
-    .replace(/\[([^\]]+)]\([^\n)]*\)/g, '$1')
-    .replace(/\[([^\]]+)]\s*\[[^\]]*]/g, '$1')
-    .replace(/^ {0,3}(?:#{1,6}|>|[-+*]|\d+[.)])(?:[ \t]+|$)/gm, '')
-    .replace(/\*\*|__|~~/g, '')
-    .replace(/(?<!\w)[*_](?=\S)|(?<=\S)[*_](?!\w)/g, '')
-
-  text = text.replace(/\uE000(\d+)\uE001/g, (_match, index: string) => literals[Number(index)] ?? '')
-  return normalizeWhitespace(text)
+  return normalizeWhitespace(extractMarkdownPlainText(value))
 }
 
 export function textContainsQuote(source: string, quote: string): boolean {

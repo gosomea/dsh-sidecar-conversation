@@ -1,3 +1,4 @@
+import { registerSessionTree } from './session-tree.js'
 import { nativeTitle, plainTitle } from './presentation.js'
 import { registerWorkspaceAdapter } from './workspace-adapter.js'
 import type {} from '@deepseek-ai/dsh-session-turn-outline/client'
@@ -153,7 +154,36 @@ export function registerNativeSidebar(ctx: Context, controller: SidecarControlle
       })
     }
   }
-  const disposers = [nativeOrder.dispose, () => { disposed = true; stopCatalog() }, disposeBinding, ctx.sidebarRight.openTabs?.subscribe(() => controller.targetsChanged()) ?? (() => {}), registerReferences(ctx, controller), () => { controller.referenceTarget = undefined; controller.recentTarget = undefined }]
+  controller.mainReferenceTarget = async reference => {
+    const parent = reference.parentSessionId as SessionId
+    // Never redirect a selection to whichever Session happened to mount later.
+    if (ctx.uiSession.adapter.current.getSnapshot().key !== parent) throw new Error('主会话已切换，请重新选择')
+    await ctx.sessions.using(parent, { source: 'sidecarView' }, async ref => {
+      const binding = await ref.ready
+      const actions = await waitInput(parent)
+      if (ctx.uiSession.adapter.current.getSnapshot().key !== parent) throw new Error('主会话已切换，请重新选择')
+      const input = ctx.conversation.input.for(binding.ctx)
+      const span = actions.captureInsertion()
+      if (!input.insertReference({ source: SOURCE, ref: JSON.stringify(reference), label: referenceLabel(reference),
+        appearance: 'session', clipboardText: referenceLabel(reference) }, { ...span, start: span.end })) {
+        throw new Error('主会话输入框正忙，引用未添加，请重试')
+      }
+      actions.persistDraft()
+      input.focus()
+    })
+  }
+  // The native dock mounts in both main and embedded conversations; each input
+  // stays keyed by its real Session. No second editor or draft storage.
+  function InputBridge({ sessionId, inputActions }: PropsRuntime<'conversation.input.dock'>) {
+    useEffect(() => {
+      referenceInputs.set(String(sessionId), inputActions)
+      for (const notify of inputWaiters) notify()
+      return () => { if (referenceInputs.get(String(sessionId)) === inputActions) referenceInputs.delete(String(sessionId)) }
+    }, [sessionId, inputActions])
+    return null
+  }
+  const disposers = [nativeOrder.dispose, registerSessionTree(ctx, controller), () => { disposed = true; stopCatalog() }, disposeBinding, ctx.sidebarRight.openTabs?.subscribe(() => controller.targetsChanged()) ?? (() => {}), registerReferences(ctx, controller), () => { controller.mainReferenceTarget = undefined; controller.referenceTarget = undefined; controller.recentTarget = undefined }]
+  disposers.push(ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'sidecar-main-reference' }, InputBridge)))
   disposers.push(ctx.sidebarRightTabs.register({
     id: SIDECAR_CHAT_TAB_TYPE, kind: SIDECAR_CHAT_TAB_TYPE, title: value => saved[decodeURIComponent(value.slice(PREFIX.length))]?.title ?? '新侧问', patterns: [PREFIX + '**'], keepMounted: true,
   }))

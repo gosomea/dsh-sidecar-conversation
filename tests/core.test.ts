@@ -81,3 +81,15 @@ it('labels a sidecar from its first question without splitting emoji', () => {
   expect(textContainsQuote('alpha beta', 'alphabeta')).toBe(false)
   expect(textContainsQuote(source, '第一项；第三项')).toBe(false)
  })
+
+
+it.each([
+  ['table cells', '| 状态 | 说明 |\n| --- | --- |\n| 完成 | 可以继续 |', '状态\t说明\n完成\t可以继续'],
+  ['entities', '参数 A &amp; B，数量 &#50;。', 'A & B，数量 2'],
+  ['balanced link destination', '[工作区](https://example.com/a_(b)) 后续操作。', '工作区 后续操作。'],
+  ['nested blockquote', '> > **第一段**\n> >\n> > 第二段', '第一段\n\n第二段'],
+  ['reference link', '[原生文档][docs] 后续步骤\n\n[docs]: https://example.com', '原生文档 后续步骤'],
+])('matches native Markdown selections: %s', (_name, source, selected) => {
+  expect(textContainsQuote(source, selected)).toBe(true)
+  expect(textContainsQuote(source, selected + '额外伪造内容')).toBe(false)
+})
