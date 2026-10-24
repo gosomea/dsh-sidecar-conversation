@@ -1,36 +1,74 @@
 # dsh-sidecar-conversation
 
-Ask about selected text or a completed turn in DeepSeek Harness's native sidebar. Version `0.2.0` is an release targeting a DSH `0.2.1-alpha.3` build with the workspace extensions below; Better Sidebar is not required. [简体中文](./README.zh.md)
+**Turn part of your main conversation into a lasting conversation beside it.**
 
-## Usage
+In DeepSeek Harness Web, select part of an answer, ask about a whole turn, or fork from an earlier point. Sidecars run in the native right sidebar with their own messages, drafts, model and permissions while your main conversation stays in place.
 
-Select text in a completed Assistant reply, or click “侧问这个回合” at the end of a turn, then choose an action:
+[简体中文](./README.zh.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.0) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
 
-| Action | Result |
-| --- | --- |
-| 追加到最近侧问 (append) | Append to the current parent's most recently used Sidecar; shown only when that Session exists and its tab remains open |
-| 仅用选文新建／仅用此回合新建 (independent) | Create an independent Session containing the selection or the turn's final answer, plus your question |
-| 从此回合 Fork | Create a child Session inheriting history through that turn, with the current reference attached |
+## What you can do
 
-The left menu confirms the creation mode and opens the native composer directly. You can attach files, choose permissions and a model, or add more references. New chats do not copy another Sidecar's draft; explicit append preserves the target draft and adds references. Independent Sessions appear alongside the main Session; nested Fork rows depend on DSH's native workspace implementation, which this plugin does not modify.
+- **Explain part of an answer:** select unfamiliar text and ask about it with a source reference.
+- **Continue an existing Sidecar:** append new text or a whole-turn reference to the most recently used Sidecar without losing its draft question.
+- **Explore another direction:** fork an earlier turn's context while the main conversation continues its work.
+- **Start with references only:** create an independent Session containing explicit references and your question, without inheriting the full conversation.
 
-Sidecar history can create, reopen, archive and restore chats for the current source Session. Closing a tab closes its view without stopping generation. Switching main Sessions, reopening tabs and refreshing restore drafts and references by child Session; sent references remain clickable and highlight their source.
+The right-hand chat uses DSH's native composer: file uploads, model and reasoning selection, permission controls, messages, tool calls, approvals, stop and error displays. A Sidecar supports continued conversation across multiple turns.
 
-A compact Fork row links the fork turn, lag count and latest parent turn; appending references does not update inherited history. Independent Sessions indicate that they contain references without a Fork gap. Selections are limited to 4,000 characters.
+## Two entry points, the same choices
 
-## Permissions and Sessions
+Select text in a completed Assistant answer, or click “侧问这个回合” at the end of a turn, to open the action menu.
 
-Menu-created chats start read-only and can be changed through DSH's native permission picker. Read-only restricts workspace writes, not network access; Sidecars share the source workspace, so tools with write access can change the same files. The plugin does not automatically send replies back to the parent.
+| Menu action | Text selection | Whole turn |
+| --- | --- | --- |
+| 追加到最近侧问 (append) | Add the selected text to the target draft | Add a whole-turn reference to the target draft |
+| 仅用选文新建／仅用此回合新建 (independent) | Start with only the selected text | Start with only that turn's final Assistant answer |
+| 从此回合 Fork | Inherit history through the selection's turn and attach its text reference | Inherit history through the turn and attach its turn reference |
 
-Initial titles use the first question’s summary. The native Session title then drives the left row, right tab and history; renames update all three. The left Fork prefix `↳ 侧问 ·` is a display decoration that survives renaming, with legacy prefixes normalized only for display. History uses the native sidebar order, including manual ordering, recency, pins and grouping.
+Append appears only when the current main Session has a prepared Sidecar whose tab remains open. The menu therefore has two creation choices, or three choices including append. If the right dock is collapsed but the tab remains open, append reveals the target Sidecar. Closed tabs and unprepared drafts are not eligible targets.
 
-Plugin archival changes Sidecar history status; native Sessions stay unarchived so they can run. Independent Sessions also appear in the source Session's Sidecar history, without establishing native parentage.
+The left menu determines the creation mode. Choosing a new chat prepares its Session and opens the native composer directly, without another mode choice or an automatic model call. The new draft contains only the current source and does not copy another Sidecar's selections.
 
-## Installation and development
+## From references to continued conversation
 
-This package requires the local ui-workspace `sidebar.workspaces.session.title` slot and `sessionOrder` service. Stock `0.2.1-alpha.3` does not supply these extensions; the plugin npm package does not include them. [Release requirements](./docs/release-0.2.0.md)
+1. Select text or a turn on the left, then choose append, independent creation or Fork.
+2. Edit your question on the right and choose files, model and permissions as needed. Add references from the left one at a time, or remove individual draft references.
+3. Click a draft reference to return to and highlight its source. References remain clickable in sent messages.
+4. Continue in the current Sidecar after sending. Switching main Sessions, reopening tabs and refreshing restore each child Session's state without mixing selections or returning to an older Sidecar.
 
-Install local source in an environment matching the target DSH version:
+Selections are limited to 4,000 characters. A whole-turn reference points to the final Assistant answer; independent Sessions receive that explicit reference, while only Fork inherits earlier history. Missing or unreadable sources produce an error while preserving the reference.
+
+## Fork and independent Sessions
+
+| | Linked Sidecar (Fork) | Independent Session |
+| --- | --- | --- |
+| Context | Main conversation history through the selected turn | Only explicitly added references and questions |
+| Native relationship | Child of the main Session | No native parent, alongside the main Session |
+| Fork progress | Links the fork turn, lag count and latest parent turn | Indicates references only, without a Fork gap |
+| History entry | Listed in the source Session's Sidecar history | Also recoverable from the source Session's Sidecar history |
+
+A Fork contains context from the point of branching and does not follow the main conversation live. The progress row updates when the main Session adds turns; appending references neither reduces the lag count nor merges later history automatically.
+
+Both modes use the source workspace. Menu-created chats start read-only and can be changed through native permission controls; tools with write access modify the same workspace files. Read-only does not imply network isolation. Sidecar messages belong to their own Session and are not automatically sent back to the main conversation.
+
+## Titles, history and recovery
+
+Initial titles summarize the first question. The left list, right tab and history then read the native Session title, including manual renames. The left Fork prefix `↳ 侧问 ·` is a display decoration and is not stored in new Session names. Sidecar history follows native manual ordering, recency, pins and grouping.
+
+Sidecar history supports creation, reopening, archival and restoration. Closing a tab closes its view without stopping background generation; plugin archival does not delete the native Session. History creation starts from the main Session's latest completed answer and offers Fork or independent mode; without a completed answer, it asks you to finish a turn first.
+
+Messages, replies, attachments and tool events use native DSH Session capabilities. `sidecar-conversation.json` stores the Sidecar index; drafts and tab layouts are browser state. After clearing browser data, history can reopen sent conversations, but session logs cannot recover unsent drafts. [Native session-log ownership and upgrade boundaries](./docs/native-session-log.md)
+
+## Check DSH compatibility before installation
+
+Version `0.2.0` uses DSH `0.2.1-alpha.3` APIs and requires these **local ui-workspace extensions** in the target build:
+
+- `uiWorkspace.sessionOrder`: provides the native sidebar's Session order.
+- `sidebar.workspaces.session.title`: decorates linked Sidecar titles.
+
+Stock npm DSH `0.2.1-alpha.3` does not include these extensions, and the plugin package does not ship DSH core modifications. Installing the plugin alone cannot supply them; a missing order interface produces an explicit error. Nested rows also depend on the target DSH build. Better Sidebar is not required. [Full compatibility details](./docs/compatibility.md)
+
+In a DSH environment with these capabilities, install a locally built plugin through the Web profile:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -41,18 +79,17 @@ dsh plugin --profile web add link:$(pwd)
 dsh --profile web --dump-config
 ```
 
-Restart the target Web instance after installation. Validate with a separate DSH_HOME, port and plugin build directory first to avoid rebuilding artifacts served by the daily instance. `--dump-config` proves configuration composition, not runtime loading. [Compatibility and validation limits](./docs/compatibility.md)
+Restart the target Web instance after installation. `--dump-config` proves composition only; open the page to verify runtime loading. Use a separate DSH_HOME, port and plugin directory for development builds to protect your daily instance. Uninstall with `dsh plugin --profile web remove dsh-sidecar-conversation`. [Development and verification](./docs/development.md)
 
-Uninstall with `dsh plugin --profile web remove dsh-sidecar-conversation`. Dependencies use public npm packages, without TypeScript paths or workspace links into a local Harness checkout.
+## Validation records
 
-## Persistence and validation
+The plugin passes 140 tests and TypeScript checks; its release tarball passed an independent build, entry checks, clean installation and Host-entry import. Browser and real-model coverage are recorded separately below:
 
-Messages, replies, attachments and tool events use native DSH Session capabilities. The plugin stores a Sidecar index and source associations; drafts and tabs are browser state. After clearing browser data, history can reopen sent conversations but cannot recover unsent drafts.
+- [Both entry points, main-Session switching, reopening, refresh and reference navigation](./docs/regression-2026-10-24.md)
+- [Native titles, ordering, manual renames and post-deployment data checks](./docs/title-order-2026-10-24.md)
+- [Architecture boundaries between native Sessions and the plugin](./docs/architecture.md)
 
-- [Native session logs: ownership, references and upgrade boundaries](./docs/native-session-log.md)
-- [2026-10-24 regression: both entry points, switching, reopening and refresh](./docs/regression-2026-10-24.md)
-- [Title and order synchronization validation](./docs/title-order-2026-10-24.md)
-- [Architecture](./docs/architecture.md) and [development](./docs/development.md)
+These results do not imply that every DSH Web check passes; the linked records describe known baseline failures and remaining coverage gaps.
 
 ## License
 

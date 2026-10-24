@@ -24,4 +24,4 @@ pnpm build
 - [架构](./architecture.md)：创建、适配和视图边界。
 - [原生 session log](./native-session-log.md)：数据归属、旧路径与 DSH 升级检查。
 - [兼容性记录](./compatibility.md)：历史验证基线、结果和局限。
-- [v0.1 发布记录](./release-todo.md)：历史信息，不代表 0.2 已发布。
+- [0.2.0 发布要求](./release-0.2.0.md)与[v0.1 历史发布记录](./release-todo.md)。
