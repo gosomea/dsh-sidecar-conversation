@@ -130,8 +130,11 @@ const persistAtomic: RegistryPersistence = async (filename, snapshot) => {
     }
     await rename(temp, filename)
     await chmod(filename, 0o600)
-    const directory = await open(dirname(filename), 'r')
-    try { await directory.sync() } finally { await directory.close() }
+    // Windows cannot fsync a read-only directory handle; the file is already synced.
+    if (process.platform !== 'win32') {
+      const directory = await open(dirname(filename), 'r')
+      try { await directory.sync() } finally { await directory.close() }
+    }
   } catch (error: unknown) {
     await rm(temp, { force: true }).catch(() => undefined)
     throw error
