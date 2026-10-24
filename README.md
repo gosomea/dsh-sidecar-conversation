@@ -1,10 +1,28 @@
 # dsh-sidecar-conversation
 
-**Turn part of your main conversation into a lasting conversation beside it.**
+**Don't understand part of an AI answer? Ask beside it, without cluttering your main Session's context.**
 
-In DeepSeek Harness Web, select part of an answer, ask about a whole turn, or fork from an earlier point. Sidecars run in the native right sidebar with their own messages, drafts, model and permissions while your main conversation stays in place.
+In DeepSeek Harness Web, select unfamiliar text and ask for an explanation in the native right sidebar. Follow-up questions and explanations stay in their own Session, without being written back into your main conversation. You can also ask about a whole turn or fork from an earlier point, with separate messages, drafts, model and permissions.
 
 [简体中文](./README.zh.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.4) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
+
+## Quick install
+
+With DSH Web already installed, run this command in the same environment and `DSH_HOME` you use to start it:
+
+```sh
+dsh plugin --profile web add dsh-sidecar-conversation@0.2.4
+```
+
+Restart DSH Web and refresh the page. Keep your existing `DSH_HOME` to preserve conversations and Sidecar history. No DSH source changes or Better Sidebar installation are needed. Version `0.2.4` has been verified with official npm DSH `0.2.1-alpha.3`.
+
+Select text in a completed answer, or click “侧问这个回合”, then choose Fork or a references-only conversation and ask on the right.
+
+## Watch the 90-second demo
+
+[![Watch: ask about unfamiliar text without cluttering the main Session's context](./docs/images/sidecar-demo.jpg)](https://www.bilibili.com/video/BV1NKHP63E7h/)
+
+[Watch on Bilibili](https://www.bilibili.com/video/BV1NKHP63E7h/): real multi-turn conversations in an isolated environment, showing Fork, references-only Sessions, appended references, precise source navigation, native composer controls and history recovery. The full page stays visible, with red circles marking the focus. Waiting is edited out; some operations are sped up, with AI voice narration.
 
 ## What you can do
 

@@ -1,10 +1,28 @@
 # dsh-sidecar-conversation
 
-**把主会话中的一段内容，展开成旁边可持续的对话。**
+**看不懂就侧问，不污染主 Session 的上下文。**
 
-在 DeepSeek Harness Web 中，你可以选中一段回答、针对整个回合继续追问，或从某个旧回合分叉。侧问在原生右侧栏里聊天，拥有自己的消息、草稿、模型和权限；主会话仍留在原处。
+在 DeepSeek Harness Web 中，选中不理解的文字，就能在原生右侧栏继续问清楚。解释和追问留在侧问自己的 Session 中，不写回主会话。你也可以针对整个回合提问，或从旧回合 Fork，分别保留消息、草稿、模型和权限。
 
 [English](./README.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.4) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
+
+## 快速安装
+
+已安装 DSH Web 的用户，在启动它时使用的同一环境和 `DSH_HOME` 下执行：
+
+```sh
+dsh plugin --profile web add dsh-sidecar-conversation@0.2.4
+```
+
+安装后重启 DSH Web，再刷新页面。保留原有 `DSH_HOME`，即可保留会话与侧问历史。无需修改 DSH 源码，也不需要安装 Better Sidebar。版本 `0.2.4` 已在官方 npm DSH `0.2.1-alpha.3` 上验证。
+
+在已完成的回答中选中文字，或点击「侧问这个回合」，选择 Fork 或仅带引用的新会话，即可在右侧提问。
+
+## 90 秒实操演示
+
+[![点击观看：看不懂就侧问，不污染主 Session 上下文](./docs/images/sidecar-demo.jpg)](https://www.bilibili.com/video/BV1NKHP63E7h/)
+
+[在 B 站观看](https://www.bilibili.com/video/BV1NKHP63E7h/)：隔离环境的真实多轮对话，演示 Fork、仅带引用的独立会话、逐项追加引用、精确回跳、原生输入框和历史恢复。横屏保留完整页面，用红圈指向当前焦点；等待已剪辑，部分操作加速，旁白为 AI 配音。
 
 ## 可以怎样用
 
