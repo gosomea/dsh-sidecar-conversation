@@ -4,7 +4,7 @@
 
 在 DeepSeek Harness Web 中，你可以选中一段回答、针对整个回合继续追问，或从某个旧回合分叉。侧问在原生右侧栏里聊天，拥有自己的消息、草稿、模型和权限；主会话仍留在原处。
 
-[English](./README.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.3) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
+[English](./README.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.4) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
 
 ## 可以怎样用
 
@@ -22,8 +22,8 @@
 | 菜单选项 | 选文入口 | 整回合入口 |
 | --- | --- | --- |
 | 追加到最近侧问 | 向目标草稿添加这段选文 | 向目标草稿添加整个回合引用 |
-| 仅用选文新建／仅用此回合新建 | 新会话只带这段选文 | 新会话只带该回合的最终 Assistant 回答 |
 | 从此回合 Fork | 继承截至选文所属回合的历史，并带上选文引用 | 继承截至该回合的历史，并带上回合引用 |
+| 仅用选文新建／仅用此回合新建 | 新会话只带这段选文 | 新会话只带该回合的最终 Assistant 回答 |
 
 只有当前主会话下存在已创建、标签尚未关闭的侧问时，才显示「追加到最近侧问」。因此菜单是两个新建选项，或加上追加后的三个选项。右侧栏收起但标签仍打开时，追加会重新展开并切到目标侧问；已关闭标签和未准备完成的草稿不参与选择。
 
@@ -61,7 +61,7 @@ Fork 是分叉时的上下文，不会实时追随主会话。主会话继续产
 
 ## 安装前先确认 DSH 兼容性
 
-版本 `0.2.3` 使用未修改的官方 npm DSH `0.2.1-alpha.3` API，无需修改 DSH 源码或安装 Better Sidebar：
+版本 `0.2.4` 使用未修改的官方 npm DSH `0.2.1-alpha.3` API，无需修改 DSH 源码或安装 Better Sidebar：
 
 - `sidebar.session.row.leading` / `sidebar.session.row.hover`：已有的公开行装饰插槽；标题继续使用原生实现。
 - `sidebar.workspaces` / `shell.overlay`：通过公开插槽账本复用现有 root 视图 store handle，只读偏好，不另存排序，也不替换原生列表。
@@ -85,6 +85,7 @@ dsh --profile web --dump-config
 
 插件 153 项测试与类型检查通过；发布包经过独立构建、入口检查、干净安装与 Host 入口导入验证。浏览器和真实模型回归的范围分别记录在以下文档中：
 
+- [菜单顺序调整与验证](./docs/release-0.2.4.md)
 - [精确选文高亮与原生权限预设](./docs/release-0.2.3.md)
 - [Windows 目录 fsync 修复与 Windows/Linux CI](./docs/release-0.2.2.md)
 - [官方 npm DSH 上的插件内适配验证](./docs/plugin-only-2026-10-24.md)

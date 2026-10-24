@@ -4,7 +4,7 @@
 
 In DeepSeek Harness Web, select part of an answer, ask about a whole turn, or fork from an earlier point. Sidecars run in the native right sidebar with their own messages, drafts, model and permissions while your main conversation stays in place.
 
-[简体中文](./README.zh.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.3) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
+[简体中文](./README.zh.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.4) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
 
 ## What you can do
 
@@ -22,8 +22,8 @@ Select text in a completed Assistant answer, or click “侧问这个回合” a
 | Menu action | Text selection | Whole turn |
 | --- | --- | --- |
 | 追加到最近侧问 (append) | Add the selected text to the target draft | Add a whole-turn reference to the target draft |
-| 仅用选文新建／仅用此回合新建 (independent) | Start with only the selected text | Start with only that turn's final Assistant answer |
 | 从此回合 Fork | Inherit history through the selection's turn and attach its text reference | Inherit history through the turn and attach its turn reference |
+| 仅用选文新建／仅用此回合新建 (independent) | Start with only the selected text | Start with only that turn's final Assistant answer |
 
 Append appears only when the current main Session has a prepared Sidecar whose tab remains open. The menu therefore has two creation choices, or three choices including append. If the right dock is collapsed but the tab remains open, append reveals the target Sidecar. Closed tabs and unprepared drafts are not eligible targets.
 
@@ -61,7 +61,7 @@ Messages, replies, attachments and tool events use native DSH Session capabiliti
 
 ## Check DSH compatibility before installation
 
-Version `0.2.3` runs against the unmodified npm DSH `0.2.1-alpha.3` APIs. No DSH source patch or Better Sidebar installation is required:
+Version `0.2.4` runs against the unmodified npm DSH `0.2.1-alpha.3` APIs. No DSH source patch or Better Sidebar installation is required:
 
 - `sidebar.session.row.leading` / `sidebar.session.row.hover`: existing public row decorations; titles remain native.
 - `sidebar.workspaces` / `shell.overlay`: the public slot ledger supplies the existing root view-store handle; the plugin reads preferences without copying persistence or replacing the browser.
@@ -85,6 +85,7 @@ Restart the target Web instance after installation. `--dump-config` proves compo
 
 The plugin passes 153 tests and TypeScript checks; its release tarball passed an independent build, entry checks, clean installation and Host-entry import. Browser and real-model coverage are recorded separately below:
 
+- [Menu order and verification](./docs/release-0.2.4.md)
 - [Exact selection highlighting and native permission presets](./docs/release-0.2.3.md)
 - [Windows directory-fsync fix and Windows/Linux CI](./docs/release-0.2.2.md)
 - [Plugin-only adapter on the official npm DSH package](./docs/plugin-only-2026-10-24.md)

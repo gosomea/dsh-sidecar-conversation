@@ -43,8 +43,8 @@ export function SidecarAction({ messageId, sessionId, sourceSeq, text, useChat, 
   return <Menu open={open} onClose={() => setOpen(false)} portal compact side="top"
     items={[
       ...(target ? [{ id: 'append', label: '追加到最近侧问' }] : []),
-      { id: 'independent', label: '仅用此回合新建' },
       { id: 'fork', label: '从此回合 Fork' },
+      { id: 'independent', label: '仅用此回合新建' },
     ]}
     onSelect={id => {
       setOpen(false)

@@ -27,13 +27,13 @@ function fixture(target = false) {
 }
 it.each([false, true])('opens a two/three action menu instead of silently choosing a route (target=%s)', target => {
   const f = fixture(target); f.open()
-  expect(f.el.querySelectorAll('[role=menuitem]')).toHaveLength(target ? 3 : 2)
+  expect([...f.el.querySelectorAll('[role=menuitem]')].map(item => item.textContent)).toEqual([...(target ? ['追加到最近侧问'] : []), '从此回合 Fork', '仅用此回合新建'])
   expect(f.append).not.toHaveBeenCalled(); expect(f.create).not.toHaveBeenCalled()
 })
 it.each(['fork', 'independent'] as const)('confirms %s before opening a fresh turn draft', mode => {
   const f = fixture(true); f.open()
   const items = [...f.el.querySelectorAll<HTMLButtonElement>('[role=menuitem]')]
-  act(() => items[mode === 'fork' ? 2 : 1]!.click())
+  act(() => items[mode === 'fork' ? 1 : 2]!.click())
   expect(f.create).toHaveBeenCalledWith('parent', expect.objectContaining({ sourceKind: 'turn', sourceMessageId: 'answer-1', sourceSeq: 19, quote: '', creationMode: mode, creationConfirmed: true }))
   expect(f.append).not.toHaveBeenCalled(); expect(f.el.querySelector('[role=menu]')).toBeNull()
 })

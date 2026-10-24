@@ -27,23 +27,23 @@ function setup(hasTarget = true) {
   return { open, append, buttons: [...document.querySelectorAll('button')] }
 }
 it('shows only action labels and appends a frozen selection to the current target', () => {
-  const f = setup(); expect(f.buttons).toHaveLength(3); expect(f.buttons.map(b => b.textContent?.trim())).toEqual(['追加到最近侧问', '仅用选文新建', '从此回合 Fork']); expect(document.querySelector('small')).toBeNull()
+  const f = setup(); expect(f.buttons).toHaveLength(3); expect(f.buttons.map(b => b.textContent?.trim())).toEqual(['追加到最近侧问', '从此回合 Fork', '仅用选文新建']); expect(document.querySelector('small')).toBeNull()
   window.getSelection()!.removeAllRanges()
   act(() => f.buttons[0]!.click())
   expect(f.append).toHaveBeenCalledWith('parent', expect.objectContaining({ sourceSeq: 19, quote: 'old selected turn' }), 'latest')
   expect(f.open).not.toHaveBeenCalled()
 })
 it('always starts a fresh fork from the selected historical turn with its quote attached', () => {
-  const f = setup(); act(() => f.buttons[2]!.click())
+  const f = setup(); act(() => f.buttons[1]!.click())
   expect(f.open).toHaveBeenCalledWith('parent', expect.objectContaining({ sourceMessageId: 'old-message', sourceSeq: 19, sourceKind: 'selection', quote: 'old selected turn', creationMode: 'fork', accessMode: 'read-only' }))
   expect(f.append).not.toHaveBeenCalled()
 })
 it('omits append when no sidecar exists and leaves new-from-turn available', () => {
-  const f = setup(false); expect(f.buttons).toHaveLength(2); expect(f.buttons[0]!.textContent?.trim()).toBe('仅用选文新建'); expect(f.buttons[0]!.disabled).toBe(false)
+  const f = setup(false); expect(f.buttons).toHaveLength(2); expect(f.buttons[0]!.textContent?.trim()).toBe('从此回合 Fork'); expect(f.buttons[0]!.disabled).toBe(false)
 })
 
 it('starts an independent session directly from only the current selection', () => {
-  const f = setup(false); act(() => f.buttons[0]!.click())
+  const f = setup(false); act(() => f.buttons[1]!.click())
   expect(f.open).toHaveBeenCalledWith('parent', expect.objectContaining({ creationMode: 'independent', creationConfirmed: true, quote: 'old selected turn' }))
   expect(f.append).not.toHaveBeenCalled()
 })

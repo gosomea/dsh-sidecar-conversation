@@ -135,12 +135,12 @@ export function SelectionOverlay({ controller }: Props) {
       追加到最近侧问
     </Button>}
     <Button size="sm" variant="ghost" className={css.action}
-      onClick={() => { controller.openDraft(menu.parentSessionId, { ...selectedDraft, creationMode: 'independent', creationConfirmed: true }); close() }}>
-      仅用选文新建
-    </Button>
-    <Button size="sm" variant="ghost" className={css.action}
       onClick={() => { controller.openDraft(menu.parentSessionId, { ...selectedDraft, creationMode: 'fork', creationConfirmed: true }); close() }}>
       从此回合 Fork
+    </Button>
+    <Button size="sm" variant="ghost" className={css.action}
+      onClick={() => { controller.openDraft(menu.parentSessionId, { ...selectedDraft, creationMode: 'independent', creationConfirmed: true }); close() }}>
+      仅用选文新建
     </Button>
   </MenuSurface>
 }
