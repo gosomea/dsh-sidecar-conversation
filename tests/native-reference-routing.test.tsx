@@ -32,14 +32,13 @@ function setup(active = false) {
   const insertReference = vi.fn(() => true)
   const input = { insertReference, focus: vi.fn() }
   const ctx: any = {
-    uiWorkspace: { sessionOrder: createSnapshotStore<readonly string[]>([]) },
     get: () => ({ registerSource: () => () => {} }),
     uiConversation: { userText: { register: () => () => {} } },
     sessions: { list: createSnapshotStore<any>({ ids: [], byId: {} }), using: async (_id: string, _options: unknown, f: any) => f({ ready: Promise.resolve({ ctx: {} }) }) },
     conversation: { input: { for: () => input } },
     sidebarRightTabs: { register: () => () => {} },
     sidebarRight: { mounted: { getSnapshot: () => 'parent' }, openResourceIn: vi.fn(), openTabIn: vi.fn(), tabsIn: () => active ? [{ contentId: 'dsh-resource://sidecar/' + encodeURIComponent(sidecarTabId('b')) }] : [], closeIn: vi.fn() },
-    slots: { inject: (_: string, f: any) => f(), register: (options: any, component: any) => { entries.push({ options, component }); return () => {} } },
+    slots: { entriesOfSlot: () => [], subscribe: () => () => {}, inject: (_: string, f: any) => f(), register: (options: any, component: any) => { entries.push({ options, component }); return () => {} } },
   }
   cleanup.push(registerNativeSidebar(ctx as Context, controller))
   return { controller, ctx, entries, insertReference }

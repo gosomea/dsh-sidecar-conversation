@@ -2,17 +2,21 @@
 
 ## 当前实现
 
-`0.2.0` 适配 DSH `0.2.1-alpha.3`。Host 使用 Session Controller；客户端通过 `sidebarRight` / `sidebarRightTabs` 注册原生 Tab，通过 `sessions.retain`、SessionProvider 与 `conversation.content` factory 渲染子 Session。无需 Better Sidebar 或旧 detached Surface API。
+`0.2.1` 适配 DSH `0.2.1-alpha.3`。Host 使用 Session Controller；客户端通过 `sidebarRight` / `sidebarRightTabs` 注册原生 Tab，通过 `sessions.retain`、SessionProvider 与 `conversation.content` factory 渲染子 Session。无需 Better Sidebar 或旧 detached Surface API。
 
 原 0.1 实现不能直接在本次新版基线上运行：`effectiveApprovalPolicy` 导出已移除；旧 detached/mountSurface API 不再适用；把子 Session 原生归档以隐藏它会被 archived-session gate 阻止执行。现已替换审批查询与客户端挂载，并保持子 Session 原生未归档。
 
-## 标题与原生顺序扩展
+## 插件内的标题与顺序适配
 
-标题与顺序同步需要目标 DSH 提供 `uiWorkspace.sessionOrder` 和 `sidebar.workspaces.session.title`，这两项是本地 ui-workspace 扩展，不随插件 npm 包发布。普通 `0.2.1-alpha.3` 版本号本身不能证明这些能力存在。完整验证和原生 Web 检查边界见[标题与顺序同步记录](./title-order-2026-10-24.md)。
+`0.2.1` 不再声明或读取 `uiWorkspace.sessionOrder`、`sidebar.workspaces.session.title`。关联侧问使用公开的 `sidebar.session.row.leading` / `sidebar.session.row.hover`；原生 Session 标题仍是三个界面的名称来源。
+
+顺序适配器从公开 slot ledger 取得 `sidebar.workspaces` 的共享 store handle，在同为 root scope 的 `shell.overlay` 注册一个无 UI 组件，由框架提供原生 `useStore`，结合 `useSessions`、`useWorkspaces` 计算历史顺序。插件不调用 handle.create、不读原生 localStorage key、不写原生偏好，也不维护第二份持久化排序。适配器对当前原生视图状态形状有版本依赖，升级 DSH 时需回归手动排序、置顶和分组。
+
+原生运行状态会优先替换行首箭头；归档原生行不显示箭头。未修改的官方 DSH 不提供 Session 父子折叠，插件不替换整个原生列表来模拟该功能。旧的本地定制 DSH 仍可保留它自己的折叠能力。`0.2.0` 的本地扩展硬依赖是发布兼容性错误，历史记录见[原验收](./title-order-2026-10-24.md)。
 
 ## 2026-10-24 当前验收
 
-已部署到日常 3080；本轮回归没有重启或再次部署。选区与整回合入口、切换主会话、关闭重开、刷新、已发送引用跳转和新侧问焦点均通过；135 项测试及类型检查通过。718 个日常会话保留，740 个会话文件哈希不变。详见[回归记录](./regression-2026-10-24.md)和[原生 session log](./native-session-log.md)。
+以下为已部署日常 3080 的 `0.2.0` 记录；`0.2.1` 的官方包隔离验收见[插件内适配记录](./plugin-only-2026-10-24.md)。选区与整回合入口、切换主会话、关闭重开、刷新、已发送引用跳转和新侧问焦点均通过；135 项测试及类型检查通过。718 个日常会话保留，740 个会话文件哈希不变。详见[回归记录](./regression-2026-10-24.md)和[原生 session log](./native-session-log.md)。
 
 以下 2026-10-23 记录保留各阶段当时的测试数量、构建状态与部署范围，不代表当前未部署；后续记录只扩大明确验证的范围。
 

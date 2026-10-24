@@ -4,7 +4,7 @@
 
 在 DeepSeek Harness Web 中，你可以选中一段回答、针对整个回合继续追问，或从某个旧回合分叉。侧问在原生右侧栏里聊天，拥有自己的消息、草稿、模型和权限；主会话仍留在原处。
 
-[English](./README.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.0) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
+[English](./README.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.1) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
 
 ## 可以怎样用
 
@@ -53,7 +53,7 @@ Fork 是分叉时的上下文，不会实时追随主会话。主会话继续产
 
 ## 标题、历史与恢复
 
-初始标题取首次问题摘要。创建后，左侧列表、右侧标签和侧问历史读取原生 Session 标题；手动重命名会同步。左侧 Fork 的 `↳ 侧问 ·` 是显示前缀，不写进新的会话名。侧问历史沿用原生左栏的手动排序、最近更新、置顶和分组顺序。
+初始标题取首次问题摘要。创建后，左侧列表、右侧标签和侧问历史读取原生 Session 标题；手动重命名会同步。关联侧问通过原生行首的 `↳` 和悬浮信息标记，原生运行状态标识优先显示。历史由插件内的只读适配器读取现有工作区视图 store，同步手动顺序、最近更新、置顶和工作区分组；折叠分组不会隐藏历史条目。
 
 「侧问历史」提供新建、重新打开、归档和恢复。关闭标签只关闭视图，不会停止后台生成；归档是插件历史状态，不删除原生会话。历史新建从主会话最近一条已完成回答开始，仍可选择 Fork 或独立会话；还没有已完成回答时会提示先完成一轮。
 
@@ -61,14 +61,14 @@ Fork 是分叉时的上下文，不会实时追随主会话。主会话继续产
 
 ## 安装前先确认 DSH 兼容性
 
-版本 `0.2.0` 使用 DSH `0.2.1-alpha.3` API，并且要求目标构建具有以下 **本地 ui-workspace 扩展**：
+版本 `0.2.1` 使用未修改的官方 npm DSH `0.2.1-alpha.3` API，无需修改 DSH 源码或安装 Better Sidebar：
 
-- `uiWorkspace.sessionOrder`：读取与原生侧栏一致的会话顺序。
-- `sidebar.workspaces.session.title`：为关联侧问显示标题前缀。
+- `sidebar.session.row.leading` / `sidebar.session.row.hover`：已有的公开行装饰插槽；标题继续使用原生实现。
+- `sidebar.workspaces` / `shell.overlay`：通过公开插槽账本复用现有 root 视图 store handle，只读偏好，不另存排序，也不替换原生列表。
 
-普通 npm DSH `0.2.1-alpha.3` 不包含这两项扩展，插件包也不附带 DSH core 修改。只安装插件不能补齐这些能力；缺少排序接口时会明确报错。左栏父子折叠同样由目标 DSH 提供。无需 Better Sidebar。[完整兼容性说明](./docs/compatibility.md)
+不再使用定制的 `uiWorkspace.sessionOrder` 和 `sidebar.workspaces.session.title` 扩展。标题、输入框、引用及 session log 保持原生实现。父子行折叠是定制 DSH 的独立能力。[完整兼容性说明](./docs/compatibility.md)
 
-在具备上述能力的 DSH 环境中，通过 Web profile 安装本地构建的插件：
+源码开发时，通过 DSH Web profile 安装本地构建的插件：
 
 ```sh
 pnpm install --frozen-lockfile
@@ -83,10 +83,11 @@ dsh --profile web --dump-config
 
 ## 验证记录
 
-插件 140 项测试与类型检查通过；发布包经过独立构建、入口检查、干净安装与 Host 入口导入验证。浏览器和真实模型回归的范围分别记录在以下文档中：
+插件 147 项测试与类型检查通过；发布包经过独立构建、入口检查、干净安装与 Host 入口导入验证。浏览器和真实模型回归的范围分别记录在以下文档中：
 
+- [官方 npm DSH 上的插件内适配验证](./docs/plugin-only-2026-10-24.md)
 - [双入口、切换主会话、关闭重开、刷新与引用回跳](./docs/regression-2026-10-24.md)
-- [原生标题、顺序、手动改名和部署后的数据核对](./docs/title-order-2026-10-24.md)
+- [0.2.0 原标题与顺序部署记录](./docs/title-order-2026-10-24.md)
 - [原生 Session 与插件之间的架构边界](./docs/architecture.md)
 
 这些结果不代表 DSH 全量 Web 检查全部通过；已知基线失败和未覆盖范围在对应记录中列出。

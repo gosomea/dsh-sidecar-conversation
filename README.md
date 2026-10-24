@@ -4,7 +4,7 @@
 
 In DeepSeek Harness Web, select part of an answer, ask about a whole turn, or fork from an earlier point. Sidecars run in the native right sidebar with their own messages, drafts, model and permissions while your main conversation stays in place.
 
-[简体中文](./README.zh.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.0) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
+[简体中文](./README.zh.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.1) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
 
 ## What you can do
 
@@ -53,7 +53,7 @@ Both modes use the source workspace. Menu-created chats start read-only and can 
 
 ## Titles, history and recovery
 
-Initial titles summarize the first question. The left list, right tab and history then read the native Session title, including manual renames. The left Fork prefix `↳ 侧问 ·` is a display decoration and is not stored in new Session names. Sidecar history follows native manual ordering, recency, pins and grouping.
+Initial titles summarize the first question. The left list, right tab and history then read the native Session title, including manual renames. Linked Sidecars use the native row's leading `↳` decoration and hover card; native activity indicators take precedence. History follows native manual order, recency, pins and workspace grouping through a plugin-owned read-only adapter over the existing Workspace view store. Folding groups does not hide their history entries.
 
 Sidecar history supports creation, reopening, archival and restoration. Closing a tab closes its view without stopping background generation; plugin archival does not delete the native Session. History creation starts from the main Session's latest completed answer and offers Fork or independent mode; without a completed answer, it asks you to finish a turn first.
 
@@ -61,14 +61,14 @@ Messages, replies, attachments and tool events use native DSH Session capabiliti
 
 ## Check DSH compatibility before installation
 
-Version `0.2.0` uses DSH `0.2.1-alpha.3` APIs and requires these **local ui-workspace extensions** in the target build:
+Version `0.2.1` runs against the unmodified npm DSH `0.2.1-alpha.3` APIs. No DSH source patch or Better Sidebar installation is required:
 
-- `uiWorkspace.sessionOrder`: provides the native sidebar's Session order.
-- `sidebar.workspaces.session.title`: decorates linked Sidecar titles.
+- `sidebar.session.row.leading` / `sidebar.session.row.hover`: existing public row decorations; titles remain native.
+- `sidebar.workspaces` / `shell.overlay`: the public slot ledger supplies the existing root view-store handle; the plugin reads preferences without copying persistence or replacing the browser.
 
-Stock npm DSH `0.2.1-alpha.3` does not include these extensions, and the plugin package does not ship DSH core modifications. Installing the plugin alone cannot supply them; a missing order interface produces an explicit error. Nested rows also depend on the target DSH build. Better Sidebar is not required. [Full compatibility details](./docs/compatibility.md)
+The custom `uiWorkspace.sessionOrder` and `sidebar.workspaces.session.title` extensions are no longer used. Native titles, the composer, references and session logs remain native. Parent/child row folding is a separate feature of customized DSH builds. [Full compatibility details](./docs/compatibility.md)
 
-In a DSH environment with these capabilities, install a locally built plugin through the Web profile:
+To develop from source, install a locally built plugin through a DSH Web profile:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -83,10 +83,11 @@ Restart the target Web instance after installation. `--dump-config` proves compo
 
 ## Validation records
 
-The plugin passes 140 tests and TypeScript checks; its release tarball passed an independent build, entry checks, clean installation and Host-entry import. Browser and real-model coverage are recorded separately below:
+The plugin passes 147 tests and TypeScript checks; its release tarball passed an independent build, entry checks, clean installation and Host-entry import. Browser and real-model coverage are recorded separately below:
 
+- [Plugin-only adapter on the official npm DSH package](./docs/plugin-only-2026-10-24.md)
 - [Both entry points, main-Session switching, reopening, refresh and reference navigation](./docs/regression-2026-10-24.md)
-- [Native titles, ordering, manual renames and post-deployment data checks](./docs/title-order-2026-10-24.md)
+- [Original 0.2.0 title/order deployment record](./docs/title-order-2026-10-24.md)
 - [Architecture boundaries between native Sessions and the plugin](./docs/architecture.md)
 
 These results do not imply that every DSH Web check passes; the linked records describe known baseline failures and remaining coverage gaps.

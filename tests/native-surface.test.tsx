@@ -1,15 +1,16 @@
 import { createSnapshotStore } from './snapshot-fixture.js'
 import { SidecarClientStore } from '../src/client/store.js'
 /* @vitest-environment jsdom */
-import { act, createElement } from 'react'
+import { act, createElement, useSyncExternalStore } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { SidecarHistoryTab } from '../src/client/components/SidecarTabs.js'
 import { registerNativeSidebar } from '../src/client/native-sidebar.js'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SidecarController } from '../src/client/controller.js'
 
 vi.mock('../src/client/components/SidecarTabs.js', () => ({
-  SidecarHistoryTab: () => null,
+  SidecarHistoryTab: vi.fn(() => null),
   SidecarChatTab: ({ renderConversation }: any) => renderConversation({ childSessionId: 'child' }),
 }))
 ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
@@ -23,20 +24,21 @@ function fixture(failure = false) {
   const unregister = vi.fn()
   let service: any
   const list = createSnapshotStore<any>({ ids: [], byId: {} })
-  const sessionOrder = createSnapshotStore<readonly string[]>([])
+  const view = createSnapshotStore<any>({ groupBy: 'workspace', orderBy: 'manual', groupExpansion: {}, sessionOrderByAccount: {} })
+  const workspaces = createSnapshotStore<any>({ items: [], pinnedSessionIds: [], archivedSessionIds: [] })
+  const handle = { spec: {}, create: vi.fn() }
   const ctx = {
-    uiWorkspace: { sessionOrder },
     get: () => ({ registerSource: vi.fn(() => vi.fn()) }),
     uiConversation: { userText: { register: vi.fn(() => vi.fn()) } },
     sessions: { retain, list },
     sidebarRightTabs: { register: vi.fn(() => unregister) },
     sidebarRight: { mounted: { getSnapshot: () => 'parent' }, openResourceIn: vi.fn(), openTabIn: vi.fn(), tabsIn: () => [], closeIn: vi.fn() },
-    slots: { inject: (_: string, f: () => any) => f(), register: (options: any, component: any) => { entries.push({ options, component }); return vi.fn() } },
+    slots: { inject: (_name: string, f: () => any) => f(), entriesOfSlot: () => [{ store: handle }], subscribe: () => vi.fn(), register: (options: any, component: any) => { entries.push({ options, component }); return vi.fn() } },
   }
   const controller = { api: { catalog: vi.fn(async () => []) }, targetsChanged: vi.fn(), store: new SidecarClientStore(), bindSidebar: (s: any) => { service = s; return vi.fn() } }
   const dispose = registerNativeSidebar(ctx as unknown as Context, controller as unknown as SidecarController)
   cleanup.push(dispose)
-  return { controller, list, sessionOrder, ctx, entries, retain, release, reference, service, unregister, dispose }
+  return { controller, list, view, workspaces, handle, ctx, entries, retain, release, reference, service, unregister, dispose }
 }
 function mount(f: ReturnType<typeof fixture>) {
   f.service.openTab({ id: 'draft', type: 'dsh-sidecar-conversation:chat', title: 'sidecar', meta: {} }, { sessionId: 'parent' })
@@ -109,23 +111,39 @@ it('restores legacy tabs as metadata without opening or focusing a native pane',
   expect(JSON.parse(localStorage.getItem('dsh-sidecar-native-tabs-v1')!).legacy.title).toBe('old')
 })
 
-it.each([false, true])('updates the native row, history and tab together after rename (new=%s)', async nativeComposer => {
+it('uses existing row decorations and follows the native title after rename', () => {
   const f = fixture()
-  const record: any = { parentSessionId: 'parent', childSessionId: 'child', requestKey: 'draft', title: '↳ 侧问 · old', sourceKind: 'turn', nativeComposer, status: 'active', updatedAt: 1, creationMode: 'fork' }
-  f.controller.store.setRecords('parent', [record])
+  f.controller.store.setRecords('parent', [{ parentSessionId: 'parent', childSessionId: 'child', requestKey: 'draft', title: 'old', sourceKind: 'turn', creationMode: 'fork' } as any])
   f.list.set({ ids: ['child'], byId: { child: { title: 'old', updatedAt: 1 } } })
   f.service.openTab({ id: 'draft', type: 'dsh-sidecar-conversation:chat', meta: { version: 1, kind: 'active', parentSessionId: 'parent', childSessionId: 'child', requestKey: 'draft' } }, { sessionId: 'parent' })
-  const Row = f.entries.find(x => x.options.name === 'sidebar.workspaces.session.title')!.component
+  const Leading = f.entries.find(x => x.options.name === 'sidebar.session.row.leading')!.component
   const Title = f.entries.find(x => x.options.name === 'sidebar.right.pane.tab.title')!.component
   const el = document.createElement('div'); const root = createRoot(el)
   cleanup.unshift(() => act(() => root.unmount()))
-  const render = (name: string) => act(() => root.render(createElement('div', null,
-    createElement(Row, { sessionId: 'child', displayTitle: name }),
-    createElement(Title, { useTabInfo: () => ({ tab: { contentId: 'dsh-resource://sidecar/draft' } }) }))))
-  render('↳ 侧问 · old')
-  expect(el.textContent).toBe('↳ 侧问 · oldold')
+  act(() => root.render(createElement('div', null, createElement(Leading, { sessionId: 'child' }), createElement(Title, { useTabInfo: () => ({ tab: { contentId: 'dsh-resource://sidecar/draft' } }) }))))
+  expect(el.textContent).toBe('↳old')
   act(() => f.list.set({ ids: ['child'], byId: { child: { title: 'work1', updatedAt: 2 } } }))
-  render('work1')
-  expect(el.textContent).toBe('↳ 侧问 · work1work1')
-  expect(f.controller.store.records('parent')[0]!.title).toBe('↳ 侧问 · old')
+  expect(el.textContent).toBe('↳work1')
+  act(() => f.list.set({ ids: ['child'], byId: { child: { title: '↳ 侧问 · legacy', updatedAt: 3 } } }))
+  expect(el.textContent).toBe('legacy')
+})
+
+it('shares the native root store and updates history without a custom workspace service', () => {
+  const f = fixture()
+  const row = (id: string) => ({ id, updatedAt: 1, retainedBy: {}, blank: false })
+  f.list.set({ ids: ['a', 'b'], byId: { a: row('a'), b: row('b') } })
+  f.view.set({ ...f.view.getSnapshot(), sessionOrderByAccount: { '': ['b', 'a'] } })
+  const bridge = f.entries.find(x => x.options.id === 'sidecar-workspace-order')!
+  expect(bridge.options.store).toBe(f.handle)
+  const History = f.entries.find(x => x.options.key === 'dsh-sidecar-conversation:history')!.component
+  const root = createRoot(document.createElement('div'))
+  cleanup.unshift(() => act(() => root.unmount()))
+  const hook = (store: any) => (read: any) => read(useSyncExternalStore(store.subscribe, store.getSnapshot))
+  act(() => root.render(createElement('div', null,
+    createElement(bridge.component, { useStore: hook(f.view), useSessions: hook(f.list), useWorkspaces: hook(f.workspaces) }),
+    createElement(History, { sessionId: 'parent', useTabInfo: () => ({ tab: { id: 'history', visible: true } }) }))))
+  expect(vi.mocked(SidecarHistoryTab).mock.calls.at(-1)![0].sessionOrder).toEqual(['b', 'a'])
+  act(() => f.view.set({ ...f.view.getSnapshot(), sessionOrderByAccount: { '': ['a', 'b'] } }))
+  expect(vi.mocked(SidecarHistoryTab).mock.calls.at(-1)![0].sessionOrder).toEqual(['a', 'b'])
+  expect(f.handle.create).not.toHaveBeenCalled()
 })

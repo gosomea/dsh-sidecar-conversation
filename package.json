@@ -1,6 +1,6 @@
 {
   "name": "dsh-sidecar-conversation",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Conversation-bound chats in the native DeepSeek Harness sidebar",
   "keywords": [
     "deepseek",
@@ -111,7 +111,9 @@
     "@deepseek-ai/dsh-client-ui-workspace": "0.2.1-alpha.3",
     "@deepseek-ai/dsh-workspace": "0.2.1-alpha.3",
     "@deepseek-ai/dsh-session-turn-outline": "0.2.1-alpha.3",
-    "@deepseek-ai/dsh-client-store": "0.2.1-alpha.3"
+    "@deepseek-ai/dsh-client-store": "0.2.1-alpha.3",
+    "@deepseek-ai/dsh-api-workspace-controller": "0.2.1-alpha.3",
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.1-alpha.3"
   },
   "license": "Apache-2.0",
   "engines": {

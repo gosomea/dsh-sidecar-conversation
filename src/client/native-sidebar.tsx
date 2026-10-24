@@ -1,6 +1,5 @@
 import { nativeTitle, plainTitle } from './presentation.js'
-import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { SessionRowOwnerProps } from '@deepseek-ai/dsh-client-ui-workspace/client'
+import { registerWorkspaceAdapter } from './workspace-adapter.js'
 import type {} from '@deepseek-ai/dsh-session-turn-outline/client'
 import { ForkContext, forkProgress } from './components/ForkContext.js'
 import type { InputActions } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -29,17 +28,14 @@ type SavedTab = BetterSidebarTab & { sessionId: string; usedAt?: number }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
-    'sidebar.workspaces.session.title': { kind: 'single'; scope: 'root'; owner: SessionRowOwnerProps }
     'sidecar.conversation': { kind: 'single'; scope: 'session' }
   }
 }
 
 /** Adapts the plugin's tab lifecycle to DSH's session-owned native dock. */
 export function registerNativeSidebar(ctx: Context, controller: SidecarController): () => void {
-  // This capability is owned by the locally adapted native Workspace plugin.
-  const nativeOrder = (ctx.uiWorkspace as typeof ctx.uiWorkspace & { sessionOrder: ObservableSnapshot<readonly SessionId[]> }).sessionOrder
-  if (!nativeOrder) throw new Error('侧问需要原生 Workspace 的会话排序接口，请更新 DSH 构建')
   const sessions = ctx.sessions.list
+  const nativeOrder = registerWorkspaceAdapter(ctx, controller)
   let disposed = false
   let catalogIds = ''
   const refreshCatalog = () => {
@@ -157,7 +153,7 @@ export function registerNativeSidebar(ctx: Context, controller: SidecarControlle
       })
     }
   }
-  const disposers = [() => { disposed = true; stopCatalog() }, disposeBinding, ctx.sidebarRight.openTabs?.subscribe(() => controller.targetsChanged()) ?? (() => {}), registerReferences(ctx, controller), () => { controller.referenceTarget = undefined; controller.recentTarget = undefined }]
+  const disposers = [nativeOrder.dispose, () => { disposed = true; stopCatalog() }, disposeBinding, ctx.sidebarRight.openTabs?.subscribe(() => controller.targetsChanged()) ?? (() => {}), registerReferences(ctx, controller), () => { controller.referenceTarget = undefined; controller.recentTarget = undefined }]
   disposers.push(ctx.sidebarRightTabs.register({
     id: SIDECAR_CHAT_TAB_TYPE, kind: SIDECAR_CHAT_TAB_TYPE, title: value => saved[decodeURIComponent(value.slice(PREFIX.length))]?.title ?? '新侧问', patterns: [PREFIX + '**'], keepMounted: true,
   }))
@@ -279,15 +275,5 @@ export function registerNativeSidebar(ctx: Context, controller: SidecarControlle
   disposers.push(ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab', key: SIDECAR_HISTORY_TAB_TYPE,
   }, History)))
-  function RowTitle({ sessionId, displayTitle }: PropsRuntime<'sidebar.workspaces.session.title'>) {
-    const snapshot = useSyncExternalStore(controller.store.subscribe, controller.store.getSnapshot)
-    const record = Object.values(snapshot.recordsByParent).flat().find(item => item.childSessionId === sessionId)
-    if (!record) return <>{displayTitle}</>
-    const title = plainTitle(displayTitle)
-    return <>{record.creationMode !== 'independent' && <span aria-hidden="true">↳ 侧问 · </span>}{title}</>
-  }
-  disposers.push(ctx.slots.inject('sidebar.workspaces.session.title', () => ctx.slots.register({
-    name: 'sidebar.workspaces.session.title',
-  }, RowTitle)))
   return () => { for (const dispose of disposers.reverse()) dispose() }
 }
