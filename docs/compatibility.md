@@ -2,7 +2,7 @@
 
 ## 当前实现
 
-0.2.0（本地未发布）适配 DSH `0.2.1-alpha.3`。Host 使用 Session Controller；客户端通过 `sidebarRight` / `sidebarRightTabs` 注册原生 Tab，通过 `sessions.retain`、SessionProvider 与 `conversation.content` factory 渲染子 Session。无需 Better Sidebar 或旧 detached Surface API。
+`0.2.0` 适配 DSH `0.2.1-alpha.3`。Host 使用 Session Controller；客户端通过 `sidebarRight` / `sidebarRightTabs` 注册原生 Tab，通过 `sessions.retain`、SessionProvider 与 `conversation.content` factory 渲染子 Session。无需 Better Sidebar 或旧 detached Surface API。
 
 原 0.1 实现不能直接在本次新版基线上运行：`effectiveApprovalPolicy` 导出已移除；旧 detached/mountSurface API 不再适用；把子 Session 原生归档以隐藏它会被 archived-session gate 阻止执行。现已替换审批查询与客户端挂载，并保持子 Session 原生未归档。
 

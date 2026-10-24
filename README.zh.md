@@ -1,6 +1,6 @@
 # dsh-sidecar-conversation
 
-在 DeepSeek Harness 原生右侧栏中针对选文或整个回合提问。0.2.0 为尚未发布的开发版本，适配 DSH `0.2.1-alpha.3`；无需 Better Sidebar。[English](./README.md)
+在 DeepSeek Harness 原生右侧栏中针对选文或整个回合提问。`0.2.0` 为 发布版本，适配带下述工作区扩展的 DSH `0.2.1-alpha.3` 构建；无需 Better Sidebar。[English](./README.md)
 
 ## 使用
 
@@ -28,7 +28,7 @@ Fork 上方的一行提示显示分叉回合、落后轮数与最新主回合，
 
 ## 安装与开发
 
-标题装饰与顺序同步依赖本地 ui-workspace 的 `sidebar.workspaces.session.title` 插槽和 `sessionOrder` 服务；升级 DSH 时需保留这两项原生扩展。
+此版本要求本地 ui-workspace 提供 `sidebar.workspaces.session.title` 插槽和 `sessionOrder` 服务。普通 `0.2.1-alpha.3` 不包含这些扩展，插件 npm 包也不包含它们。[发布要求](./docs/release-0.2.0.md)
 
 在与目标 DSH 版本匹配的环境中安装本地源码：
 

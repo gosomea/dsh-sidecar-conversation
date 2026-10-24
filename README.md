@@ -1,6 +1,6 @@
 # dsh-sidecar-conversation
 
-Ask about selected text or a completed turn in DeepSeek Harness's native sidebar. Version 0.2.0 is an unpublished development version targeting DSH `0.2.1-alpha.3`; Better Sidebar is not required. [简体中文](./README.zh.md)
+Ask about selected text or a completed turn in DeepSeek Harness's native sidebar. Version `0.2.0` is an release targeting a DSH `0.2.1-alpha.3` build with the workspace extensions below; Better Sidebar is not required. [简体中文](./README.zh.md)
 
 ## Usage
 
@@ -28,7 +28,7 @@ Plugin archival changes Sidecar history status; native Sessions stay unarchived 
 
 ## Installation and development
 
-Title decoration and shared ordering require the local ui-workspace `sidebar.workspaces.session.title` slot and `sessionOrder` service. These extensions must accompany the plugin when upgrading DSH.
+This package requires the local ui-workspace `sidebar.workspaces.session.title` slot and `sessionOrder` service. Stock `0.2.1-alpha.3` does not supply these extensions; the plugin npm package does not include them. [Release requirements](./docs/release-0.2.0.md)
 
 Install local source in an environment matching the target DSH version:
 
