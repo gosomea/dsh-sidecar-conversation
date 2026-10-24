@@ -4,7 +4,7 @@
 
 在 DeepSeek Harness Web 中，你可以选中一段回答、针对整个回合继续追问，或从某个旧回合分叉。侧问在原生右侧栏里聊天，拥有自己的消息、草稿、模型和权限；主会话仍留在原处。
 
-[English](./README.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.1) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
+[English](./README.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.2) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
 
 ## 可以怎样用
 
@@ -61,7 +61,7 @@ Fork 是分叉时的上下文，不会实时追随主会话。主会话继续产
 
 ## 安装前先确认 DSH 兼容性
 
-版本 `0.2.1` 使用未修改的官方 npm DSH `0.2.1-alpha.3` API，无需修改 DSH 源码或安装 Better Sidebar：
+版本 `0.2.2` 使用未修改的官方 npm DSH `0.2.1-alpha.3` API，无需修改 DSH 源码或安装 Better Sidebar：
 
 - `sidebar.session.row.leading` / `sidebar.session.row.hover`：已有的公开行装饰插槽；标题继续使用原生实现。
 - `sidebar.workspaces` / `shell.overlay`：通过公开插槽账本复用现有 root 视图 store handle，只读偏好，不另存排序，也不替换原生列表。
@@ -83,8 +83,9 @@ dsh --profile web --dump-config
 
 ## 验证记录
 
-插件 147 项测试与类型检查通过；发布包经过独立构建、入口检查、干净安装与 Host 入口导入验证。浏览器和真实模型回归的范围分别记录在以下文档中：
+插件 153 项测试与类型检查通过；发布包经过独立构建、入口检查、干净安装与 Host 入口导入验证。浏览器和真实模型回归的范围分别记录在以下文档中：
 
+- [Windows 目录 fsync 修复与 Windows/Linux CI](./docs/release-0.2.2.md)
 - [官方 npm DSH 上的插件内适配验证](./docs/plugin-only-2026-10-24.md)
 - [双入口、切换主会话、关闭重开、刷新与引用回跳](./docs/regression-2026-10-24.md)
 - [0.2.0 原标题与顺序部署记录](./docs/title-order-2026-10-24.md)
