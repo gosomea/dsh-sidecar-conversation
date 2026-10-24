@@ -1,0 +1,15 @@
+:global(::highlight(dsh-sidecar-reference)) {
+  background-color: color-mix(in srgb, var(--dsw-alias-state-business-primary, #729fff) 40%, transparent);
+  color: var(--dsw-alias-label-primary, CanvasText);
+}
+:global(.dsh-sidecar-reference-overlay) {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+}
+:global(.dsh-sidecar-reference-overlay) span {
+  position: absolute;
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #729fff) 35%, transparent);
+  border-radius: 2px;
+}

@@ -63,12 +63,12 @@ async function fixture(options: { promptPersistenceDelayMs?: number; sourceText?
     apply: (_childSessionId, mode) => {
       appliedModes.push(mode)
       return mode === 'read-only'
-        ? { mode, effectiveSandbox: 'read-only', effectiveApproval: 'never' }
+        ? { mode, effectiveSandbox: 'read-only', effectiveApproval: 'ask' }
         : { mode, effectiveSandbox: 'workspace-write', effectiveApproval: 'ask' }
     },
     assert: record => {
       if (record.access.mode === 'read-only'
-        && (record.access.effectiveSandbox !== 'read-only' || record.access.effectiveApproval !== 'never')) {
+        && (record.access.effectiveSandbox !== 'read-only' || record.access.effectiveApproval !== 'ask')) {
         throw new Error('read-only policy drift')
       }
     },
@@ -118,7 +118,7 @@ describe('SidecarService idempotency and source validation', () => {
     expect(loadCount()).toBe(1)
     expect(appliedModes).toEqual(['read-only'])
     expect(record.status).toBe('active')
-    expect(record.access).toEqual({ mode: 'read-only', effectiveSandbox: 'read-only', effectiveApproval: 'never' })
+    expect(record.access).toEqual({ mode: 'read-only', effectiveSandbox: 'read-only', effectiveApproval: 'ask' })
   })
 
   it('activates after enqueue without polling for durable first-prompt history', async () => {

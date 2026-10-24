@@ -4,7 +4,7 @@
 
 在 DeepSeek Harness Web 中，你可以选中一段回答、针对整个回合继续追问，或从某个旧回合分叉。侧问在原生右侧栏里聊天，拥有自己的消息、草稿、模型和权限；主会话仍留在原处。
 
-[English](./README.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.2) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
+[English](./README.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.3) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
 
 ## 可以怎样用
 
@@ -33,7 +33,7 @@
 
 1. 在左侧选择文字或回合，并决定追加、独立新建或 Fork。
 2. 在右侧编辑问题，按需上传文件、选择模型与权限。可以继续从左侧逐项添加引用，也可以移除草稿中的某一项。
-3. 点击草稿引用，可回到来源消息并高亮；发送后，历史消息里的引用仍然可以点击定位。
+3. 点击草稿引用可返回来源：选文只高亮对应文字，整个回合引用才高亮回合；发送后仍可在消息历史中点击。
 4. 发送后继续在当前侧问聊天。切换主会话、关闭重开或刷新页面，会按各自子 Session 恢复内容，避免串选区或跳回旧侧问。
 
 选文最多 4,000 字符。「整个回合」引用指向该回合的最终 Assistant 回答；独立会话带入的是这条明确引用，只有 Fork 才继承之前的聊天历史。来源被删除或无法读取时会提示错误并保留引用。
@@ -49,7 +49,7 @@
 
 Fork 是分叉时的上下文，不会实时追随主会话。主会话继续产生回合时，右侧提示会更新；追加新引用不会减少落后轮数，也不会自动合并之后的主会话历史。
 
-两种会话都沿用来源工作区。菜单新建默认只读，之后通过原生选择器调整权限；允许写入的工具会修改同一工作区文件。只读不表示网络隔离。侧问消息保存在自己的 Session 中，不自动写回主会话。
+两种会话都沿用来源工作区。菜单新建使用 DSH 原生只读预设与权限菜单。创建参数 `inherit` 一次性复制主会话当前的预设，后续权限调整相互独立；真正的自定义权限保留原生沙箱与审批值。允许写入的工具会修改同一工作区文件。只读不表示网络隔离。侧问消息保存在自己的 Session 中，不自动写回主会话。
 
 ## 标题、历史与恢复
 
@@ -61,7 +61,7 @@ Fork 是分叉时的上下文，不会实时追随主会话。主会话继续产
 
 ## 安装前先确认 DSH 兼容性
 
-版本 `0.2.2` 使用未修改的官方 npm DSH `0.2.1-alpha.3` API，无需修改 DSH 源码或安装 Better Sidebar：
+版本 `0.2.3` 使用未修改的官方 npm DSH `0.2.1-alpha.3` API，无需修改 DSH 源码或安装 Better Sidebar：
 
 - `sidebar.session.row.leading` / `sidebar.session.row.hover`：已有的公开行装饰插槽；标题继续使用原生实现。
 - `sidebar.workspaces` / `shell.overlay`：通过公开插槽账本复用现有 root 视图 store handle，只读偏好，不另存排序，也不替换原生列表。
@@ -85,6 +85,7 @@ dsh --profile web --dump-config
 
 插件 153 项测试与类型检查通过；发布包经过独立构建、入口检查、干净安装与 Host 入口导入验证。浏览器和真实模型回归的范围分别记录在以下文档中：
 
+- [精确选文高亮与原生权限预设](./docs/release-0.2.3.md)
 - [Windows 目录 fsync 修复与 Windows/Linux CI](./docs/release-0.2.2.md)
 - [官方 npm DSH 上的插件内适配验证](./docs/plugin-only-2026-10-24.md)
 - [双入口、切换主会话、关闭重开、刷新与引用回跳](./docs/regression-2026-10-24.md)

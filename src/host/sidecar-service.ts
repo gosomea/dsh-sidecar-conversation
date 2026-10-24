@@ -217,8 +217,8 @@ export class SidecarService {
     await this.ensureLoaded(record.childSessionId)
     let access
     try {
-      if (record.creationMode === 'independent' && record.access.mode === 'inherit') await this.ensureLoaded(record.parentSessionId)
-      access = this.access.apply(record.childSessionId, record.access.mode, record.creationMode === 'independent' ? record.parentSessionId : undefined)
+      if (record.access.mode === 'inherit') await this.ensureLoaded(record.parentSessionId)
+      access = this.access.apply(record.childSessionId, record.access.mode, record.access.mode === 'inherit' ? record.parentSessionId : undefined)
     } catch (error: unknown) {
       throw new Error(`Sidecar 权限恢复失败：${error instanceof Error ? error.message : String(error)}`, { cause: error })
     }

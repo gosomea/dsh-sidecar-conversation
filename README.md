@@ -4,7 +4,7 @@
 
 In DeepSeek Harness Web, select part of an answer, ask about a whole turn, or fork from an earlier point. Sidecars run in the native right sidebar with their own messages, drafts, model and permissions while your main conversation stays in place.
 
-[简体中文](./README.zh.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.2) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
+[简体中文](./README.zh.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.3) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
 
 ## What you can do
 
@@ -33,7 +33,7 @@ The left menu determines the creation mode. Choosing a new chat prepares its Ses
 
 1. Select text or a turn on the left, then choose append, independent creation or Fork.
 2. Edit your question on the right and choose files, model and permissions as needed. Add references from the left one at a time, or remove individual draft references.
-3. Click a draft reference to return to and highlight its source. References remain clickable in sent messages.
+3. Click a draft reference to return to its source: a text reference highlights only the selected text; a whole-turn reference highlights the turn. Sent references remain clickable.
 4. Continue in the current Sidecar after sending. Switching main Sessions, reopening tabs and refreshing restore each child Session's state without mixing selections or returning to an older Sidecar.
 
 Selections are limited to 4,000 characters. A whole-turn reference points to the final Assistant answer; independent Sessions receive that explicit reference, while only Fork inherits earlier history. Missing or unreadable sources produce an error while preserving the reference.
@@ -49,7 +49,7 @@ Selections are limited to 4,000 characters. A whole-turn reference points to the
 
 A Fork contains context from the point of branching and does not follow the main conversation live. The progress row updates when the main Session adds turns; appending references neither reduces the lag count nor merges later history automatically.
 
-Both modes use the source workspace. Menu-created chats start read-only and can be changed through native permission controls; tools with write access modify the same workspace files. Read-only does not imply network isolation. Sidecar messages belong to their own Session and are not automatically sent back to the main conversation.
+Both modes use the source workspace. Menu-created chats use DSH’s native read-only preset and permission menu. The `inherit` permission option copies the main Session’s current preset once; later permission changes are independent. Genuine custom permissions retain their native sandbox and approval values. Tools with write access modify the same workspace files. Read-only does not imply network isolation. Sidecar messages belong to their own Session and are not automatically sent back to the main conversation.
 
 ## Titles, history and recovery
 
@@ -61,7 +61,7 @@ Messages, replies, attachments and tool events use native DSH Session capabiliti
 
 ## Check DSH compatibility before installation
 
-Version `0.2.2` runs against the unmodified npm DSH `0.2.1-alpha.3` APIs. No DSH source patch or Better Sidebar installation is required:
+Version `0.2.3` runs against the unmodified npm DSH `0.2.1-alpha.3` APIs. No DSH source patch or Better Sidebar installation is required:
 
 - `sidebar.session.row.leading` / `sidebar.session.row.hover`: existing public row decorations; titles remain native.
 - `sidebar.workspaces` / `shell.overlay`: the public slot ledger supplies the existing root view-store handle; the plugin reads preferences without copying persistence or replacing the browser.
@@ -85,6 +85,7 @@ Restart the target Web instance after installation. `--dump-config` proves compo
 
 The plugin passes 153 tests and TypeScript checks; its release tarball passed an independent build, entry checks, clean installation and Host-entry import. Browser and real-model coverage are recorded separately below:
 
+- [Exact selection highlighting and native permission presets](./docs/release-0.2.3.md)
 - [Windows directory-fsync fix and Windows/Linux CI](./docs/release-0.2.2.md)
 - [Plugin-only adapter on the official npm DSH package](./docs/plugin-only-2026-10-24.md)
 - [Both entry points, main-Session switching, reopening, refresh and reference navigation](./docs/regression-2026-10-24.md)

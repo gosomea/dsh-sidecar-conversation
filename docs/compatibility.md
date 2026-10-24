@@ -2,7 +2,7 @@
 
 ## 当前实现
 
-`0.2.2` 适配 DSH `0.2.1-alpha.3`。Host 使用 Session Controller；客户端通过 `sidebarRight` / `sidebarRightTabs` 注册原生 Tab，通过 `sessions.retain`、SessionProvider 与 `conversation.content` factory 渲染子 Session。无需 Better Sidebar 或旧 detached Surface API。
+`0.2.3` 适配 DSH `0.2.1-alpha.3`。Host 使用 Session Controller；客户端通过 `sidebarRight` / `sidebarRightTabs` 注册原生 Tab，通过 `sessions.retain`、SessionProvider 与 `conversation.content` factory 渲染子 Session。无需 Better Sidebar 或旧 detached Surface API。
 
 原 0.1 实现不能直接在本次新版基线上运行：`effectiveApprovalPolicy` 导出已移除；旧 detached/mountSurface API 不再适用；把子 Session 原生归档以隐藏它会被 archived-session gate 阻止执行。现已替换审批查询与客户端挂载，并保持子 Session 原生未归档。
 
@@ -73,3 +73,7 @@
 新增可选 creationMode（缺省 fork，或 independent），旧记录仍按关联侧问读取。独立模式使用 Session Controller create，沿用工作区与所选权限，不设置 parentSessionId，不继承历史。发送内容只含明确选中文字和新问题。registry 保留来源会话关联以供历史入口查找。历史“新建侧问”由 Host 查询最近已完成回答，不依赖屏幕上已挂载的消息。
 
 隔离验证：API 和浏览器分别创建独立会话，原生 v4 header 均无 parentSessionId；日志无父会话测试标记，模型对未知标记回复 UNKNOWN；左侧 aria-level 为 1，关联侧问为 2；从历史按钮创建、选择独立模式、发送收到回复、从左侧打开均通过。100 项插件测试（含模式持久化、同请求模式冲突、权限复制、历史入口）通过。日常 3080 未部署。
+
+## 0.2.3 原生权限与选文定位
+
+新增依赖是官方已发布的 `@deepseek-ai/dsh-permission-presets` 服务，不依赖本地定制 API。使用 DSH 原生预设身份、沙箱与审批事实，权限菜单与后续独立调整继续交给原生 Session。选文定位只使用公开渲染标记、DOM Range 和浏览器高亮 API；不修改 DSH 源码。验证范围见[0.2.3 记录](./release-0.2.3.md)。

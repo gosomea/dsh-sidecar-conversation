@@ -59,7 +59,8 @@ export function SelectionOverlay({ controller }: Props) {
       if (controller.selectionFromNavigation || !sidebarAvailable || selection === null || selection.isCollapsed || selection.rangeCount === 0) return
       const sourceRow = assistantSelectionRow(selection)
       if (sourceRow === undefined) return
-      const quote = selection.toString().trim()
+      const selectedText = selection.toString()
+      const quote = selectedText.trim()
       if (!quote || quote.length > 4_000) return
       const source = controller.selectedSource(quote, sourceRow)
       if (source === undefined) return
@@ -69,7 +70,7 @@ export function SelectionOverlay({ controller }: Props) {
       before.selectNodeContents(sourceRow)
       before.setEnd(selection.getRangeAt(0).startContainer, selection.getRangeAt(0).startOffset)
       setMenu({
-        sourceOffset: before.toString().length,
+        sourceOffset: before.toString().length + selectedText.length - selectedText.trimStart().length,
         parentSessionId, quote,
         messageId: candidate.messageId,
         sourceSeq: candidate.sourceSeq,

@@ -14,7 +14,7 @@ export * from './core/types.js'
 export { SidecarRegistry } from './host/registry.js'
 
 export const name = 'sidecar-conversation'
-export const inject = ['sessionController', 'workspaceRegistry', 'webServer', 'sessions', 'sandboxPolicy', 'approval']
+export const inject = ['sessionController', 'workspaceRegistry', 'webServer', 'sessions', 'sandboxPolicy', 'approval', 'permissionPresets']
 
 export async function apply(ctx: Context): Promise<void> {
   const registry = new SidecarRegistry()
