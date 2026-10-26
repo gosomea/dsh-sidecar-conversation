@@ -15,9 +15,8 @@ export function modernSidecarHostApi(ctx: Context): SidecarHostApi {
       createIndependent: async ({ payload }) => {
         const source = await ctx.sessionQuery.readSession(payload.parentSessionId)
         if (source.session.cwd === undefined) throw new Error('Cannot create independent session without source workspace')
-        const workspace = ctx.workspaceRegistry.list().find(item => item.sessionIds.includes(payload.parentSessionId))
         return ok(await ctx.sessionController.create({ sessionId: payload.sessionId,
-          ...(workspace === undefined ? { cwd: source.session.cwd } : { workspaceId: workspace.id }),
+          cwd: source.session.cwd,
         }))
       },
       fork: async ({ payload }) => ok(await ctx.sessionController.fork(payload)),
@@ -39,6 +38,20 @@ export function modernSidecarHostApi(ctx: Context): SidecarHostApi {
       },
     },
     workspace: {
+      reconcileSidecar: async ({ payload }) => {
+        const inspected = await ctx.sessionQuery.readSession(payload.childSessionId)
+        const workspaces = ctx.workspaceRegistry.list()
+        const memberships = workspaces.filter(item => item.sessionIds.includes(payload.childSessionId))
+        // Use the native blank boundary, not message counts or the plugin title.
+        // Empty sidecars must not be candidates for native New Session reuse.
+        if (!inspected.events.some(event => event.type === 'turn/start')) {
+          for (const workspace of memberships) await workspace.detachSession(payload.childSessionId)
+        } else if (payload.attach && memberships.length === 0) {
+          const parent = workspaces.find(item => item.sessionIds.includes(payload.parentSessionId))
+          if (parent && parent.path === inspected.session.cwd) await parent.attachSession(payload.childSessionId)
+        }
+        return ok(undefined)
+      },
       ensureUsable: async ({ payload }) => {
         await ctx.workspaceRegistry.unarchiveSession(payload.sessionId)
         return ok({ archived: false })

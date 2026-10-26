@@ -2,9 +2,13 @@
 
 ## 当前实现
 
-`0.2.3` 适配 DSH `0.2.1-alpha.3`。Host 使用 Session Controller；客户端通过 `sidebarRight` / `sidebarRightTabs` 注册原生 Tab，通过 `sessions.retain`、SessionProvider 与 `conversation.content` factory 渲染子 Session。无需 Better Sidebar 或旧 detached Surface API。
+`0.2.8` 在未修改的 DSH `0.2.1-rc.3` 隔离实例上验证。Host 使用 Session Controller；客户端通过 `sidebarRight` / `sidebarRightTabs` 注册原生 Tab，通过 `sessions.retain`、SessionProvider 与 `conversation.content` factory 渲染子 Session。无需 Better Sidebar 或旧 detached Surface API。
 
 原 0.1 实现不能直接在本次新版基线上运行：`effectiveApprovalPolicy` 导出已移除；旧 detached/mountSurface API 不再适用；把子 Session 原生归档以隐藏它会被 archived-session gate 阻止执行。现已替换审批查询与客户端挂载，并保持子 Session 原生未归档。
+
+## 空侧问与主会话权限
+
+未发送侧问不加入工作区可复用空会话列表，首轮开始后通过原生 workspace API 加入。旧空侧问恢复只调整成员关系，不重写权限和原生日志。普通新会话保持原生默认权限。详见[0.2.8 验证记录](./native-list-lifecycle-2026-10-26.md)。
 
 ## Windows 索引写入
 
@@ -16,7 +20,7 @@
 
 顺序适配器从公开 slot ledger 取得 `sidebar.workspaces` 的共享 store handle，在同为 root scope 的 `shell.overlay` 注册一个无 UI 组件，由框架提供原生 `useStore`，结合 `useSessions`、`useWorkspaces` 计算历史顺序。插件不调用 handle.create、不读原生 localStorage key、不写原生偏好，也不维护第二份持久化排序。适配器对当前原生视图状态形状有版本依赖，升级 DSH 时需回归手动排序、置顶和分组。
 
-原生运行状态会优先替换行首箭头；归档原生行不显示箭头。未修改的官方 DSH 原生列表不提供 Session 父子折叠。当前插件通过公开 `sidebar.workspaces` 插槽提供会话层级视图，关联关系来自插件索引；统一列表内提供原生搜索、同级拖动排序、置顶与归档，不需要切换视图；全文搜索是否启用由 DSH 原生索引配置决定。无需任何 DSH 源码定制。`0.2.0` 的本地扩展硬依赖是发布兼容性错误，历史记录见[原验收](./title-order-2026-10-24.md)。
+原生运行状态会优先替换行首箭头；归档原生行不显示箭头。未修改的官方 DSH 原生列表不提供 Session 父子折叠。当前插件通过公开 `sidebar.workspaces` 插槽提供会话层级视图，关联关系来自插件索引；0.2.8 默认保留完整原生列表，底部切换可进入插件层级视图，已有明确选择继续保留；可选层级视图复用原生搜索、同级拖动排序、置顶与归档操作，但行由插件渲染，并非公开原生行组件；全文搜索是否启用由 DSH 原生索引配置决定。无需任何 DSH 源码定制。`0.2.0` 的本地扩展硬依赖是发布兼容性错误，历史记录见[原验收](./title-order-2026-10-24.md)。
 
 ## 2026-10-24 当前验收
 

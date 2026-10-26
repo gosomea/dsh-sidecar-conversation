@@ -20,12 +20,12 @@ describe('current Session Controller boundary', () => {
   })
 })
 
-it('creates a root Session in the source workspace without copying history', async () => {
+it('creates an unattached root Session with the source cwd, outside native blank reuse', async () => {
   const create = vi.fn(async () => ({ sessionId: 'new' }))
   const readSession = vi.fn(async () => ({ session: { cwd: '/test' }, events: [{ type: 'assistant/message' }] }))
   const api = modernSidecarHostApi({ sessionController: { create }, sessionQuery: { readSession }, workspaceRegistry: { list: () => [{ id: 'workspace', sessionIds: ['parent'] }] } } as unknown as Context)
   await api.sessions.createIndependent({ payload: { parentSessionId: 'parent', sessionId: 'new' } } as never)
-  expect(create).toHaveBeenCalledWith({ sessionId: 'new', workspaceId: 'workspace' })
+  expect(create).toHaveBeenCalledWith({ sessionId: 'new', cwd: '/test' })
   expect(readSession).toHaveBeenCalledWith('parent')
 })
 
@@ -38,4 +38,44 @@ it('reads native log events without the removed Controller inspect API or activa
   expect(response).toEqual({ result: { ok: true, value: { events: events.map(event => ({ event })), hasMore: false } } })
   expect(readSession).toHaveBeenCalledWith('parent')
   expect(resolveAgent).not.toHaveBeenCalled()
+})
+
+function workspaceFixture(events: any[], member = true) {
+  const workspace = { id: 'workspace', path: '/test', sessionIds: member ? ['parent', 'child'] : ['parent'],
+    detachSession: vi.fn(async (id: string) => { workspace.sessionIds = workspace.sessionIds.filter(x => x !== id) }),
+    attachSession: vi.fn(async (id: string) => { workspace.sessionIds.push(id) }),
+  }
+  const readSession = vi.fn(async () => ({ session: { cwd: '/test' }, events }))
+  const api = modernSidecarHostApi({ sessionQuery: { readSession }, workspaceRegistry: { list: () => [workspace] } } as unknown as Context)
+  const reconcile = (attach = true) => api.workspace.reconcileSidecar({ rpcId: 'test', payload: { parentSessionId: 'parent', childSessionId: 'child', attach } } as never)
+  return { api, workspace, reconcile }
+}
+it('removes legacy empty sidecars from reuse candidates without changing their permission events', async () => {
+  const events = [{ type: 'permission/preset', data: { preset: 'danger-full-access' } },
+    { type: 'sandbox/mode', data: { mode: 'read-only' } }, { type: 'approval/policy', data: { policy: 'never' } }]
+  const before = JSON.stringify(events)
+  const f = workspaceFixture(events)
+  await f.reconcile(); await f.reconcile()
+  expect(f.workspace.sessionIds).toEqual(['parent'])
+  expect(f.workspace.detachSession).toHaveBeenCalledOnce()
+  expect(JSON.stringify(events)).toBe(before)
+})
+it('attaches a started sidecar once, including failed turns, without changing main-session membership', async () => {
+  const f = workspaceFixture([{ type: 'turn/start' }, { type: 'turn/error' }], false)
+  await f.reconcile(); await f.reconcile()
+  expect(f.workspace.sessionIds).toEqual(['parent', 'child'])
+  expect(f.workspace.attachSession).toHaveBeenCalledOnce()
+  expect(f.workspace.detachSession).not.toHaveBeenCalled()
+})
+it('does not detach an existing fork containing turns', async () => {
+  const f = workspaceFixture([{ type: 'turn/start' }])
+  await f.reconcile()
+  expect(f.workspace.detachSession).not.toHaveBeenCalled()
+  expect(f.workspace.attachSession).not.toHaveBeenCalled()
+})
+
+it('does not reattach a sent sidecar the user intentionally ungrouped', async () => {
+  const f = workspaceFixture([{ type: 'turn/start' }], false)
+  await f.reconcile(false)
+  expect(f.workspace.attachSession).not.toHaveBeenCalled()
 })

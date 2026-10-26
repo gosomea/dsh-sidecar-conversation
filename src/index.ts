@@ -26,7 +26,7 @@ export async function apply(ctx: Context): Promise<void> {
   ctx.effect(() => {
     broker.start()
     const disposeNative = ctx.on('session/event', (session, event) => {
-      void service.noteNativeEvent(String(session.id), event).catch(error => ctx.logger.warn('Sidecar title sync failed: %s', String(error)))
+      void service.noteNativeEvent(String(session.id), event).catch(error => ctx.logger.warn('Sidecar native event sync failed: %s', String(error)))
     })
     const disposeRoutes = registerRoutes(ctx.webServer, service, broker)
     return () => { disposeNative(); disposeRoutes(); broker.dispose() }

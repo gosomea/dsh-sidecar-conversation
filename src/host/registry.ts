@@ -80,6 +80,7 @@ function isRecord(value: unknown): value is SidecarRecord {
     && (item.nativeComposer === true ? typeof item.firstQuestion === 'string' : isNonEmptyString(item.firstQuestion))
     && (item.nativeComposer === true ? typeof item.firstPromptRpcId === 'string' : isNonEmptyString(item.firstPromptRpcId))
     && (item.nativeComposer === undefined || typeof item.nativeComposer === 'boolean')
+    && (item.pendingWorkspace === undefined || typeof item.pendingWorkspace === 'boolean')
     && isAccessSnapshot(item.access)
     && isNonEmptyString(item.title)
     && isReasonableTimestamp(item.createdAt)
@@ -239,6 +240,15 @@ export class SidecarRegistry {
       if (!record.firstQuestion) { record.firstQuestion = question; if (record.title === '新侧问') record.title = title }
       record.updatedAt = Date.now()
       return cloneRecord(record)
+    })
+  }
+
+  async setPendingWorkspace(childSessionId: string, pending: boolean): Promise<void> {
+    await this.mutate(records => {
+      const record = records.find(item => item.childSessionId === childSessionId)
+      if (!record) throw new Error('Sidecar is not registered')
+      record.pendingWorkspace = pending
+      return true
     })
   }
 

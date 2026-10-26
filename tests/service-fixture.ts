@@ -53,6 +53,7 @@ export async function fixture(options: { promptPersistenceDelayMs?: number; sour
     },
   }
   const workspace = {
+    reconcileSidecar: async () => ({ result: { ok: true, value: undefined } }),
     ensureUsable: async (request: { rpcId: string; payload: { sessionId: string } }) => {
       archives++
       return { rpcId: request.rpcId, result: { ok: true, value: { archivedSessionIds: [request.payload.sessionId] } } }

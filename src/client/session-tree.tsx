@@ -31,8 +31,8 @@ const MODE = 'dsh-sidecar-session-tree-v1'
 const FOLDS = 'dsh-sidecar-session-folds-v1'
 /** Reuses the native browser's public store and injected Host operations. */
 export function registerSessionTree(ctx: Context, controller: SidecarController): () => void {
-  let enabled = true
-  try { enabled = localStorage.getItem(MODE) !== 'false' } catch { /* Optional preference. */ }
+  let enabled = false
+  try { enabled = localStorage.getItem(MODE) === 'true' } catch { /* Optional preference. */ }
   const listeners = new Set<() => void>()
   const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } }
   const setEnabled = (value: boolean) => {

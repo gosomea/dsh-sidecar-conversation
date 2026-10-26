@@ -24,6 +24,7 @@ export interface SidecarHostApi {
     models(request: { rpcId: string; payload: { sessionId: SessionId } }): Promise<RpcResponse<unknown>>
   }
   workspace: {
+    reconcileSidecar(request: { rpcId: string; payload: { parentSessionId: SessionId; childSessionId: SessionId; attach: boolean } }): Promise<RpcResponse<unknown>>
     ensureUsable(request: { rpcId: string; payload: { sessionId: SessionId } }): Promise<RpcResponse<unknown>>
   }
 }
@@ -79,6 +80,7 @@ export class SidecarService {
   async recoverRegistered(): Promise<void> {
     await forEachBounded(this.registry.all(), 4, async (record) => {
       try {
+        await this.reconcileWorkspace(record)
         await this.ensureUsable(record.childSessionId)
         if (record.status === 'provisioning') await this.finishProvisioning(record)
         else await this.upgradeTitle(record)
@@ -197,6 +199,7 @@ export class SidecarService {
       sourceSeq: source.seq,
       sourceKind,
       creationMode,
+      ...(creationMode === 'independent' ? { pendingWorkspace: true } : {}),
       quote,
       firstQuestion: question,
       firstPromptRpcId,
@@ -213,6 +216,7 @@ export class SidecarService {
   private async finishProvisioning(record: SidecarRecord): Promise<SidecarRecord> {
     // Native archive now blocks agent steps. Keep active sidecars runnable;
     // the plugin registry owns its separate user-visible archive state.
+    await this.reconcileWorkspace(record)
     await this.ensureUsable(record.childSessionId)
     await this.ensureLoaded(record.childSessionId)
     let access
@@ -238,6 +242,7 @@ export class SidecarService {
   async noteNativeEvent(child: string, event: HistoryEvent): Promise<void> {
     const record = this.registry.getByChild(child)
     if (!record) return
+    if (event.type === 'turn/start') await this.reconcileWorkspace(record)
     if (event.type === 'session/title') {
       const data = event.data as { title?: string }
       if (data?.title && data.title !== record.title) await this.registry.setTitle(child, data.title)
@@ -390,6 +395,16 @@ export class SidecarService {
     })().finally(() => { this.promptFlights.delete(key) })
     this.promptFlights.set(key, { text, task })
     return task
+  }
+
+  private async reconcileWorkspace(record: SidecarRecord): Promise<void> {
+    const blank = !(await this.history(record.childSessionId)).some(event => event.type === 'turn/start')
+    const pending = this.registry.getByChild(record.childSessionId)?.pendingWorkspace === true
+    // Persist before detaching, so a crash after the first turn can finish attachment.
+    if (blank && !pending) await this.registry.setPendingWorkspace(record.childSessionId, true)
+    unwrap(await this.api.workspace.reconcileSidecar({ rpcId: stableRpcId('workspace', record.childSessionId),
+      payload: { parentSessionId: record.parentSessionId as SessionId, childSessionId: record.childSessionId as SessionId, attach: pending } }))
+    if (!blank && pending) await this.registry.setPendingWorkspace(record.childSessionId, false)
   }
 
   private async ensureUsable(childSessionId: string): Promise<void> {

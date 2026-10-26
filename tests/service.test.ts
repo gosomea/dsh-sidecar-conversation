@@ -49,9 +49,8 @@ describe('SidecarService idempotency and source validation', () => {
     const { service, historyCount } = await fixture({ promptPersistenceDelayMs: 25 })
     const record = await service.create(input)
     expect(record.status).toBe('active')
-    // A fresh atomic receipt proves this prompt has never been admitted, so
-    // the normal path never scans child history or waits for durability.
-    expect(historyCount(record.childSessionId)).toBe(0)
+    // One scan checks workspace reservation; prompt admission does not poll.
+    expect(historyCount(record.childSessionId)).toBe(1)
   })
 
   it('does not replay an accepted first prompt while its history is catching up', async () => {
@@ -119,7 +118,7 @@ describe('SidecarService idempotency and source validation', () => {
     ])
     expect(counts()).toEqual({ forks: 1, prompts: 2, archives: 1 })
     expect(promptTexts[1]).toContain('<sidecar_question>')
-    expect(historyCount(record.childSessionId)).toBe(0)
+    expect(historyCount(record.childSessionId)).toBe(1)
   })
 
   it('rejects concurrent reuse of a prompt request key with different text', async () => {
@@ -311,4 +310,20 @@ it('keeps a native name chosen before first send and syncs legacy rename events'
   const legacy = await old.service.create({ ...nativeInput, requestKey: 'legacy-title' })
   await old.service.noteNativeEvent(legacy.childSessionId, { type: 'session/title', seq: 30, data: { title: 'legacy renamed' } })
   expect(old.registry.getByChild(legacy.childSessionId)?.title).toBe('legacy renamed')
+})
+
+it('reserves a blank sidecar durably and completes membership on the first native turn', async () => {
+  const f = await fixture()
+  const child = await f.service.prepare({ ...nativeInput, creationMode: 'independent' })
+  expect(f.registry.getByChild(child.childSessionId)?.pendingWorkspace).toBe(true)
+  const modes = [...f.appliedModes]
+  await f.service.recoverRegistered()
+  expect(f.appliedModes).toEqual(modes)
+  const turn = { type: 'turn/start', seq: 30 }
+  f.events.get(child.childSessionId)!.push(turn)
+  await f.service.noteNativeEvent(child.childSessionId, turn)
+  const restored = new SidecarRegistry(f.registry.filename); await restored.load()
+  expect(restored.getByChild(child.childSessionId)?.pendingWorkspace).toBe(false)
+  expect(f.appliedModes).toEqual(modes)
+  expect(f.events.get('parent')!.some(e => e.type === 'sandbox/mode')).toBe(false)
 })

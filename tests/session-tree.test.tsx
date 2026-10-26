@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { sessionTree, registerSessionTree, reorderSessions } from '../src/client/session-tree.js'
 import { workspaceOrder } from '../src/client/workspace-adapter.js'
 import { SidecarController } from '../src/client/controller.js'
@@ -12,6 +12,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', async importOriginal => ({ ...a
 }))
 ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
 const relation = (parentSessionId: string, childSessionId: string, creationMode: 'fork' | 'independent' = 'fork') => ({ parentSessionId, childSessionId, creationMode })
+beforeEach(() => { localStorage.setItem('dsh-sidecar-session-tree-v1', 'true') })
 afterEach(() => { localStorage.clear(); document.body.innerHTML = '' })
 it('uses plugin associations without native parent metadata and leaves independent chats top-level', () => {
   expect(sessionTree(['child', 'independent', 'parent', 'nested'], [relation('parent', 'child'), relation('parent', 'independent', 'independent'), relation('child', 'nested')])).toEqual([
@@ -246,4 +247,13 @@ it('switches to the native slot and back, persists the preference across registr
   expect(override?.component).toBeDefined()
   expect(localStorage.getItem('dsh-sidecar-session-tree-v1')).toBe('true')
   act(() => root.unmount()); dispose()
+})
+
+it('defaults to the untouched native list and registers only a hierarchy toggle', () => {
+  localStorage.removeItem('dsh-sidecar-session-tree-v1')
+  const register = vi.fn(() => () => {})
+  const ctx: any = { slots: { register, entries: () => [], subscribe: () => () => {}, inject: (_: string, fn: any) => fn() } }
+  const dispose = registerSessionTree(ctx, new SidecarController())
+  expect(register.mock.calls.map((call: any) => call[0].name)).toEqual(['sidebar.footer.action'])
+  dispose()
 })

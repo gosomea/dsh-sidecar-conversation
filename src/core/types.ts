@@ -17,6 +17,8 @@ export interface SidecarAccessSnapshot {
 export interface SidecarRecord {
   /** New conversations use the native composer and native permission controls. */
   nativeComposer?: boolean
+  /** Reserved outside workspace blank-session reuse until the first native turn. */
+  pendingWorkspace?: boolean
   parentSessionId: string
   childSessionId: string
   requestKey: string

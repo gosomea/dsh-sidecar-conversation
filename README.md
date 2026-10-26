@@ -4,27 +4,27 @@
 
 In DeepSeek Harness Web, select unfamiliar text and ask for an explanation in the native right sidebar. Follow-up questions and explanations stay in their own Session, without being written back into your main conversation. You can also ask about a whole turn or fork from an earlier point, with separate messages, drafts, model and permissions.
 
-[简体中文](./README.zh.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.7) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
+[简体中文](./README.zh.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.8) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
 
 ## Quick install
 
 With DSH Web already installed, run this command in the same environment and `DSH_HOME` you use to start it:
 
 ```sh
-dsh plugin --profile web add dsh-sidecar-conversation@0.2.7
+dsh plugin --profile web add dsh-sidecar-conversation@0.2.8
 ```
 
-Restart DSH Web and refresh the page. Keep your existing `DSH_HOME` to preserve conversations and Sidecar history. No DSH source changes or Better Sidebar installation are needed. Version `0.2.7` has been verified in an isolated, unmodified DSH `0.2.1-rc.3` host.
+Restart DSH Web and refresh the page. Keep your existing `DSH_HOME` to preserve conversations and Sidecar history. No DSH source changes or Better Sidebar installation are needed. Version `0.2.8` has been verified in an isolated, unmodified DSH `0.2.1-rc.3` host.
 
 Select text in a completed answer, or click “侧问这个回合”, then choose Fork or a references-only conversation and ask on the right.
 
-## 0.2.7: sidebar fixes
+## 0.2.8: native list and permission lifecycle
 
-Blank sessions now show the native New Session label. Workspace headers can create sessions; the footer can switch back to the native list and remembers the choice. Chevron, folder and plus icons share fixed sizing and vertical alignment. Full workspace management remains available in the native list.
+The full native session list is now the default. Its rows, workspace management, search, pinning and archiving remain owned by DSH. Use the footer toggle for the optional collapsible Sidecar view; an explicitly saved choice is preserved.
 
-Search, sibling drag ordering, pinning, archiving and collapsible Sidecar lineage share one list. Associated chats nest under their main Session; independent chats remain roots. Native stores own ordering and archive state, and dragging never reparents a chat. Full-text search follows the host’s native index configuration.
+Unsent sidecars no longer occupy reusable workspace blanks. Ordinary New Session therefore keeps native permission defaults instead of inheriting an old sidecar's settings and showing Custom. First-turn attachment and legacy blank recovery preserve native logs and permissions.
 
-[Implementation boundaries and verification](./docs/sidebar-followup-2026-10-26.md)
+[Implementation boundaries and verification](./docs/native-list-lifecycle-2026-10-26.md)
 
 ## Watch the 90-second demo
 
@@ -87,12 +87,16 @@ Messages, replies, attachments and tool events use native DSH Session capabiliti
 
 ## Check DSH compatibility before installation
 
-Version `0.2.7` uses public DSH APIs and its unified list was verified against unmodified DSH `0.2.1-rc.3`. No DSH source patch or Better Sidebar installation is required:
+Version `0.2.8` uses public DSH APIs and its unified list was verified against unmodified DSH `0.2.1-rc.3`. No DSH source patch or Better Sidebar installation is required:
 
 - `sidebar.session.row.leading` / `sidebar.session.row.hover`: existing public row decorations; titles remain native.
 - `sidebar.workspaces` / `shell.overlay`: the public slot ledger supplies the existing root view-store handle; the plugin renders the unified list and reuses native preferences and ordering actions, without a second order store.
 
-All Sidecar extensions live in the plugin; no DSH source patch or custom `uiWorkspace.sessionOrder` / `sidebar.workspaces.session.title` service is needed. A public sidebar slot supplies a collapsible Session tree from the plugin registry, including on rc.3 where ordinary Fork logs omit parent links. Independent chats remain roots. Native titles, order data, composer and session logs remain authoritative. One unified list provides search, sibling drag ordering, pinning, archiving and collapsible lineage. A persistent footer switch restores the shipped native list when needed. Workspace headers offer native new-session actions; blank sessions use the native New Session label. Workspace registration, rename and removal remain available in the native list. Ordering and archive filters use the native view store; dragging never reparents a chat. Search respects native configuration: titles and workspaces by default, message content when the native full-text index is enabled. [Full compatibility details](./docs/compatibility.md)
+All Sidecar extensions live in the plugin; no DSH source patch or custom `uiWorkspace.sessionOrder` / `sidebar.workspaces.session.title` service is needed. A public sidebar slot supplies a collapsible Session tree from the plugin registry, including on rc.3 where ordinary Fork logs omit parent links. Independent chats remain roots. Native titles, order data, composer and session logs remain authoritative. The full native list is the default: DSH owns row rendering, search, ordering, pinning, archiving and workspace management. A persistent footer toggle opens the plugin's collapsible hierarchy view. That optional view uses native state and actions but still renders its own rows; it needs compatibility testing when DSH changes. No private row imports or DSH patches are used.
+
+Unsent independent sidecars keep their native Session and logs outside workspace membership until their first native turn starts. This prevents native New Session from reusing a reserved blank with sidecar permissions. Recovery also detaches legacy blank sidecars without rewriting permissions or deleting logs; they remain accessible through sidecar history. Ordinary new sessions retain DSH's native defaults.
+
+[Full compatibility details](./docs/compatibility.md)
 
 To develop from source, install a locally built plugin through a DSH Web profile:
 
