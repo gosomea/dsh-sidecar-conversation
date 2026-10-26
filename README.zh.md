@@ -4,25 +4,27 @@
 
 在 DeepSeek Harness Web 中，选中不理解的文字，就能在原生右侧栏继续问清楚。解释和追问留在侧问自己的 Session 中，不写回主会话。你也可以针对整个回合提问，或从旧回合 Fork，分别保留消息、草稿、模型和权限。
 
-[English](./README.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.6) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
+[English](./README.md) · [GitHub Release](https://github.com/gosomea/dsh-sidecar-conversation/releases/tag/v0.2.7) · [npm](https://www.npmjs.com/package/dsh-sidecar-conversation)
 
 ## 快速安装
 
 已安装 DSH Web 的用户，在启动它时使用的同一环境和 `DSH_HOME` 下执行：
 
 ```sh
-dsh plugin --profile web add dsh-sidecar-conversation@0.2.6
+dsh plugin --profile web add dsh-sidecar-conversation@0.2.7
 ```
 
-安装后重启 DSH Web，再刷新页面。保留原有 `DSH_HOME`，即可保留会话与侧问历史。无需修改 DSH 源码，也不需要安装 Better Sidebar。版本 `0.2.6` 的统一列表已在未修改的 DSH `0.2.1-rc.3` 隔离实例上验证。
+安装后重启 DSH Web，再刷新页面。保留原有 `DSH_HOME`，即可保留会话与侧问历史。无需修改 DSH 源码，也不需要安装 Better Sidebar。版本 `0.2.7` 的统一列表已在未修改的 DSH `0.2.1-rc.3` 隔离实例上验证。
 
 在已完成的回答中选中文字，或点击「侧问这个回合」，选择 Fork 或仅带引用的新会话，即可在右侧提问。
 
-## 0.2.6：统一左侧列表
+## 0.2.7：列表修复与图标对齐
+
+空会话正确显示“新会话”；工作区标题旁可以新建会话；底部恢复原生列表切换并记住选择。展开箭头、文件夹和新建图标固定尺寸、垂直居中。完整工作区管理仍可切回原生列表操作。
 
 搜索、同级拖动排序、置顶、归档与侧问层级折叠放在同一个列表中，不用切换视图。关联侧问显示在主会话下，独立新会话保持顶层。排序与归档沿用原生状态；拖动不会改变父子关系。默认搜索标题和工作区，启用 DSH 原生全文索引后也可搜索正文。
 
-[实现边界与完整验证记录](./docs/unified-sidebar-2026-10-25.md)
+[实现边界与完整验证记录](./docs/sidebar-followup-2026-10-26.md)
 
 ## 90 秒实操演示
 
@@ -86,12 +88,12 @@ Fork 是分叉时的上下文，不会实时追随主会话。主会话继续产
 
 ## 安装前先确认 DSH 兼容性
 
-版本 `0.2.6` 使用 DSH 公开 API，统一列表在未修改的 `0.2.1-rc.3` 上验证，无需修改 DSH 源码或安装 Better Sidebar：
+版本 `0.2.7` 使用 DSH 公开 API，统一列表在未修改的 `0.2.1-rc.3` 上验证，无需修改 DSH 源码或安装 Better Sidebar：
 
 - `sidebar.session.row.leading` / `sidebar.session.row.hover`：已有的公开行装饰插槽；标题继续使用原生实现。
 - `sidebar.workspaces` / `shell.overlay`：通过公开插槽账本复用现有 root 视图 store handle，复用原生偏好和排序操作；列表由插件统一渲染，不另存会话排序。
 
-所有侧问扩展均在插件内，不需要修改 DSH 源码，也不使用定制的 `uiWorkspace.sessionOrder` 和 `sidebar.workspaces.session.title`。插件通过公开侧栏插槽提供可折叠会话层级，以插件索引关联父子会话；独立新会话保持顶层。标题、排序数据、输入框、引用及 session log 复用原生能力。左侧统一列表直接提供搜索、同级拖动、置顶、归档和层级折叠，不需要切换列表。排序和归档筛选写入原生视图状态；拖动不改变父子关系。搜索沿用原生配置：默认匹配标题和工作区，原生全文索引启用时也搜索消息内容。即使 DSH `rc.3` 的普通 Fork 日志不再记录父会话，插件索引仍能提供层级。[完整兼容性说明](./docs/compatibility.md)
+所有侧问扩展均在插件内，不需要修改 DSH 源码，也不使用定制的 `uiWorkspace.sessionOrder` 和 `sidebar.workspaces.session.title`。插件通过公开侧栏插槽提供可折叠会话层级，以插件索引关联父子会话；独立新会话保持顶层。标题、排序数据、输入框、引用及 session log 复用原生能力。左侧统一列表直接提供搜索、同级拖动、置顶、归档和层级折叠，日常会话操作不需要切换列表；底部仍保留“原生列表 / 侧问层级列表”切换并记住选择。工作区标题旁的“＋”调用原生新建会话，空会话显示“新会话”。新增工作区、工作区重命名/移除等完整管理操作目前仍在原生列表中。排序和归档筛选写入原生视图状态；拖动不改变父子关系。搜索沿用原生配置：默认匹配标题和工作区，原生全文索引启用时也搜索消息内容。即使 DSH `rc.3` 的普通 Fork 日志不再记录父会话，插件索引仍能提供层级。[完整兼容性说明](./docs/compatibility.md)
 
 源码开发时，通过 DSH Web profile 安装本地构建的插件：
 

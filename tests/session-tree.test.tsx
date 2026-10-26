@@ -53,7 +53,7 @@ it('renders and persists folds in one list and disposes without touching session
   act(() => host.querySelector<HTMLButtonElement>('[aria-label="展开 parent 的侧问"]')!.click())
   expect(host.querySelector('[data-sidecar-tree-session="child"]')).not.toBeNull()
   expect(host.textContent).not.toContain('管理')
-  expect(entries.some(e => e.options.name === 'sidebar.footer.action')).toBe(false)
+  expect(entries.some(e => e.options.name === 'sidebar.footer.action')).toBe(true)
   act(() => root.unmount()); dispose()
   expect(controller.store.records('parent')).toHaveLength(1)
 })
@@ -96,10 +96,11 @@ function mountBrowser() {
   let Component: any
   const ctx: any = { uiWorkspace: nativeActions, uiSession: { adapter: { current: createSnapshotStore({ key: 'parent' }) } }, slots: {
     entries: () => [{ component: () => null, store: {}, inject: () => ({}) }], subscribe: () => () => {},
-    register: (_: any, component: any) => { Component = component; return () => {} },
+    inject: (_: string, fn: any) => fn(),
+    register: (options: any, component: any) => { if (options.name === 'sidebar.workspaces') Component = component; return () => {} },
   } }
   const dispose = registerSessionTree(ctx, controller)
-  const props = { wide: true, expandSidebar: vi.fn(), useWorkspaceShortcuts: (f: any) => f({ searchRequest: 0 }), useSessions: (f: any) => f(list), useWorkspaces: (f: any) => f(workspaces), useStore: (f: any) => f(view), open: vi.fn(), notifyArchivedNotOpenable: vi.fn(),
+  const props = { wide: true, expandSidebar: vi.fn(), useWorkspaceShortcuts: (f: any) => f({ searchRequest: 0 }), useSessions: (f: any) => f(list), useWorkspaces: (f: any) => f(workspaces), useStore: (f: any) => f(view), startSession: vi.fn(), open: vi.fn(), notifyArchivedNotOpenable: vi.fn(),
     searchSessions: vi.fn(async (_q: string, _signal: AbortSignal) => ({ items: [] as any[], hasMore: false })), actions: { setSessionOrder: vi.fn(), setGroupBy: vi.fn(), setGroupExpanded: vi.fn(), setOrderBy: vi.fn(), setArchivedFilter: vi.fn() } }
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host)
@@ -118,7 +119,7 @@ function mountBrowser() {
       target.dispatchEvent(event)
     }
   })
-  return { controller, host, props, nativeActions, workspaces, view, render, input, drag, close: () => { act(() => root.unmount()); dispose() } }
+  return { controller, list, host, props, nativeActions, workspaces, view, render, input, drag, close: () => { act(() => root.unmount()); dispose() } }
 }
 it('uses native full-text search, includes ancestors, and ignores aborted stale responses', async () => {
   vi.useFakeTimers()
@@ -194,4 +195,55 @@ it('treats disabled native indexing as title-only search without an error banner
     expect(f.host.querySelector('[role="alert"]')).toBeNull()
     expect(f.host.querySelector('[data-sidecar-tree-session="child"]')).not.toBeNull()
   } finally { f.close(); vi.useRealTimers() }
+})
+
+it('shows native blank title instead of an old sidecar label without renaming stored data', () => {
+  const f = mountBrowser()
+  try {
+    f.list.byId.parent.title = '新侧问'; f.list.byId.parent.blank = true; f.list.byId.parent.retainedBy = { mainView: 1 }; f.render()
+    expect(f.host.querySelector('[data-sidecar-tree-session="parent"] button[title="新会话"]')).not.toBeNull()
+    expect(f.list.byId.parent.title).toBe('新侧问')
+    f.list.byId.parent.blank = false; f.render()
+    expect(f.host.querySelector('[data-sidecar-tree-session="parent"] button[title="新侧问"]')).not.toBeNull()
+  } finally { f.close() }
+})
+it('keeps empty workspaces actionable and starts a native session in the selected workspace', () => {
+  const f = mountBrowser()
+  try {
+    f.view.groupBy = 'workspace'
+    f.workspaces.items = [{ workspaceId: 'empty', title: 'Empty workspace', path: '/empty', sessionIds: [] }]
+    f.render()
+    act(() => f.host.querySelector<HTMLButtonElement>('[aria-label="在 Empty workspace 新建会话"]')!.click())
+    expect(f.props.startSession).toHaveBeenCalledWith('empty')
+    expect(f.props.actions.setGroupExpanded).toHaveBeenCalledWith('empty', true)
+    expect(f.controller.store.records('parent')).toHaveLength(2)
+  } finally { f.close() }
+})
+it('switches to the native slot and back, persists the preference across registration', () => {
+  const native = { component: () => null, store: {}, inject: () => ({}) }
+  let override: any; let Toggle: any; let notify = () => {}
+  const ctx: any = { slots: {
+    entries: () => override ? [override, native] : [native],
+    subscribe: (_: string, fn: any) => { notify = fn; return () => { notify = () => {} } },
+    inject: (_: string, fn: any) => fn(),
+    register: (options: any, component: any) => {
+      if (options.name === 'sidebar.footer.action') { Toggle = component; return () => {} }
+      override = { component, ...options }; notify()
+      return () => { override = undefined; notify() }
+    },
+  } }
+  const controller = new SidecarController()
+  let dispose = registerSessionTree(ctx, controller)
+  const host = document.createElement('div'); const root = createRoot(host)
+  act(() => root.render(createElement(Toggle, { wide: true })))
+  act(() => host.querySelector('button')!.click())
+  expect(override).toBeUndefined()
+  expect(localStorage.getItem('dsh-sidecar-session-tree-v1')).toBe('false')
+  dispose(); dispose = registerSessionTree(ctx, controller)
+  expect(override).toBeUndefined()
+  act(() => root.render(createElement(Toggle, { wide: true })))
+  act(() => host.querySelector('button')!.click())
+  expect(override?.component).toBeDefined()
+  expect(localStorage.getItem('dsh-sidecar-session-tree-v1')).toBe('true')
+  act(() => root.unmount()); dispose()
 })

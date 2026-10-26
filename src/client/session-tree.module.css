@@ -6,12 +6,14 @@
 .row:hover, .row[data-selected=true] { background: var(--dsw-alias-interactive-bg-hover, #8882); }
 .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; flex: 1; min-width: 0; padding: 8px 0; }
 .tree button { color: inherit; font: inherit; cursor: pointer; }
-.title, .fold, .actions, .group { border: 0; background: none; }
+.title, .fold, .actions, .group, .create { border: 0; background: none; }
 .fold, .spacer { flex: 0 0 18px; width: 18px; }
 .fold { padding: 3px 0; }
 .actions { flex: 0 0 24px; opacity: .6; padding: 4px; }
 .count, .empty { color: var(--dsw-alias-label-secondary); font-size: 12px; }
-.group { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; padding: 12px 4px 6px; font-size: 12px !important; opacity: .7; }
+.group { display: flex; align-items: center; gap: 6px; max-width: 100%; text-align: left; opacity: .7; }
+.group svg { display: block; flex: 0 0 16px; }
+.groupTitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 20px; }
 .running { color: var(--dsw-alias-label-link, #679cff); }
 
 .filters { display: flex; gap: 4px; margin-bottom: 6px; }
@@ -20,3 +22,11 @@
 .row[data-drop=before] { box-shadow: 0 -2px var(--dsw-alias-label-link, #679cff); }
 .row[data-drop=after] { box-shadow: 0 2px var(--dsw-alias-label-link, #679cff); }
 .row[draggable=true] { cursor: grab; }
+
+.groupHeader { display: flex; align-items: center; min-width: 0; margin-top: 8px; border-radius: 8px; }
+.groupHeader:hover { background: var(--dsw-alias-interactive-bg-hover, #8882); }
+.groupHeader .group { flex: 1; min-width: 0; min-height: 36px; padding: 8px 4px; font-size: 14px !important; }
+.create { display: flex; align-items: center; justify-content: center; flex: 0 0 28px; height: 28px; padding: 0; border-radius: 6px; opacity: .55; }
+.create:hover, .create:focus-visible { opacity: 1; background: var(--dsw-alias-interactive-bg-hover, #8882); }
+.filters { flex-direction: column; padding: 8px; border: 1px solid var(--dsw-alias-border-primary, #8885); border-radius: 8px; }
+.filters select { font-size: 13px; padding: 6px; }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
+import type { StoredEntry, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { WorkspaceBrowserProps } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { Button, Menu, MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SidecarRecord } from '../core/types.js'
@@ -27,9 +27,20 @@ export function sessionTree(ids: readonly string[], records: readonly Pick<Sidec
   return roots
 }
 
+const MODE = 'dsh-sidecar-session-tree-v1'
 const FOLDS = 'dsh-sidecar-session-folds-v1'
 /** Reuses the native browser's public store and injected Host operations. */
 export function registerSessionTree(ctx: Context, controller: SidecarController): () => void {
+  let enabled = true
+  try { enabled = localStorage.getItem(MODE) !== 'false' } catch { /* Optional preference. */ }
+  const listeners = new Set<() => void>()
+  const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn) } }
+  const setEnabled = (value: boolean) => {
+    enabled = value
+    try { localStorage.setItem(MODE, String(value)) } catch { /* Optional preference. */ }
+    sync()
+    for (const fn of listeners) fn()
+  }
   let stopTree: (() => void) | undefined
   let original: StoredEntry | undefined
   let syncing = false
@@ -43,6 +54,7 @@ export function registerSessionTree(ctx: Context, controller: SidecarController)
     const searchInput = useRef<HTMLInputElement>(null)
     const searchRequest = props.useWorkspaceShortcuts(s => s.searchRequest)
     useEffect(() => { if (searchRequest) { props.expandSidebar(); searchInput.current?.focus() } }, [searchRequest])
+    const [filtersOpen, setFiltersOpen] = useState(false)
     const [query, setQuery] = useState('')
     const normalizedQuery = query.trim().toLocaleLowerCase()
     const [search, setSearch] = useState<{ query: string; items: { sessionId: SessionId; snippet: string }[]; status: 'idle' | 'loading' | 'ready' | 'error' | 'disabled'; error?: string; hasMore: boolean }>({ query: '', items: [], status: 'idle', hasMore: false })
@@ -71,7 +83,10 @@ export function registerSessionTree(ctx: Context, controller: SidecarController)
     const pinned = new Set<string>(workspaces.pinnedSessionIds)
     const ids = workspaceOrder(sessions, workspaces, view).filter(id => view.archivedFilter === 'only' ? archived.has(id) : view.archivedFilter === 'show' || !archived.has(id))
     const roots = sessionTree(ids, Object.values(state.recordsByParent).flat())
-    const title = (id: string) => plainTitle(sessions.byId[id as SessionId]?.title || sessions.byId[id as SessionId]?.displayTitle || '未命名') || '未命名'
+    const title = (id: string) => {
+      const summary = sessions.byId[id as SessionId]
+      return summary?.blank ? '新会话' : plainTitle(summary?.title || summary?.displayTitle || '未命名') || '未命名'
+    }
     const snippets = new Map(search.query === normalizedQuery ? search.items.map(item => [String(item.sessionId), item.snippet]) : [])
     const workspaceMatches = new Set(workspaces.items.filter(w => `${w.title} ${w.path}`.toLocaleLowerCase().includes(normalizedQuery)).flatMap(w => w.sessionIds as readonly string[]))
     const matches = (node: SessionTreeNode): boolean => title(node.id).toLocaleLowerCase().includes(normalizedQuery) || workspaceMatches.has(node.id) || snippets.has(node.id) || node.children.some(matches)
@@ -118,11 +133,11 @@ export function registerSessionTree(ctx: Context, controller: SidecarController)
             drag.current = null; setDrop(null)
           }}>
           {node.children.length > 0 ? <button type="button" className={css.fold} aria-label={`${expanded ? '折叠' : '展开'} ${title(id)} 的侧问`} aria-expanded={expanded} onClick={() => toggle(id)}>{expanded ? '⌄' : '›'}</button> : <span className={css.spacer} />}
-          <button type="button" className={css.title} aria-current={id === current ? 'page' : undefined} title={title(id)} onClick={() => archived.has(id) ? props.notifyArchivedNotOpenable() : props.open(id)} onDoubleClick={() => props.requestSessionRename(id, title(id))}>
+          <button type="button" className={css.title} aria-current={id === current ? 'page' : undefined} title={title(id)} onClick={() => archived.has(id) ? props.notifyArchivedNotOpenable() : props.open(id)} onDoubleClick={() => { if (!sessions.byId[id]?.blank) props.requestSessionRename(id, title(id)) }}>
             {sessions.byId[id]?.running && <span aria-label="运行中" className={css.running}>● </span>}{pinned.has(id) && <span aria-label="已置顶">⌖ </span>}{title(id)}{normalizedQuery && snippets.get(id) && <span className={css.snippet}>{snippets.get(id)}</span>}
           </button>
           {node.children.length > 0 && <span className={css.count}>{node.children.length}</span>}
-          <Actions id={id} title={title(id)} archived={archived.has(id)} pinned={pinned.has(id)} rename={() => props.requestSessionRename(id, title(id))} />
+          {!sessions.byId[id]?.blank && <Actions id={id} title={title(id)} archived={archived.has(id)} pinned={pinned.has(id)} rename={() => props.requestSessionRename(id, title(id))} />}
         </div>
         {expanded && node.children.length > 0 && <div role="list">{node.children.filter(n => !normalizedQuery || matches(n)).map(n => row(n, depth + 1, id))}</div>}
       </div>
@@ -133,21 +148,22 @@ export function registerSessionTree(ctx: Context, controller: SidecarController)
       return path && workspaces.items.filter(w => w.workspaceId !== id && path.startsWith(w.path.replaceAll('\\', '/').replace(/\/$/, '') + '/'))
         .sort((a, b) => b.path.length - a.path.length)[0]?.workspaceId
     }
-    const groupVisible = (id: string): boolean => !!groups.find(g => g.id === id)?.nodes.length || groups.some(g => parentGroup(g.id) === id && groupVisible(g.id))
+    const groupVisible = (id: string): boolean => !normalizedQuery && !!id || !!groups.find(g => g.id === id)?.nodes.length || groups.some(g => parentGroup(g.id) === id && groupVisible(g.id))
     const renderGroups = (parent?: string, depth = 0): import('react').ReactNode => groups.filter(g => parentGroup(g.id) === parent && groupVisible(g.id)).map(group => {
       const expanded = !!normalizedQuery || view.groupExpansion?.[group.id] !== false
       return <div key={group.id}>
-        <button type="button" className={css.group} style={{ paddingLeft: 4 + depth * 12 }} aria-expanded={expanded} onClick={() => props.actions.setGroupExpanded(group.id, !expanded)}>{expanded ? '⌄' : '›'} {group.title}</button>
+        <div className={css.groupHeader}><button type="button" className={css.group} style={{ paddingLeft: 4 + depth * 12 }} aria-expanded={expanded} onClick={() => props.actions.setGroupExpanded(group.id, !expanded)}><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d={expanded ? "m6 9 6 6 6-6" : "m9 6 6 6-6 6"} /></svg><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" /></svg><span className={css.groupTitle}>{group.title}</span></button>
+        {group.id && <button type="button" className={css.create} aria-label={`在 ${group.title} 新建会话`} title="新建会话" onClick={() => { props.actions.setGroupExpanded(group.id, true); props.startSession(group.id as Parameters<TreeProps['startSession']>[0]) }}><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 5v14M5 12h14" /></svg></button>}</div>
         {expanded && <>{renderGroups(group.id, depth + 1)}<div role="list">{group.nodes.map(n => row(n, depth))}</div></>}
       </div>
     })
     return <section className={css.tree} aria-label="会话层级">
-      <div className={css.toolbar}><input ref={searchInput} type="search" aria-label="搜索会话" placeholder="搜索会话" value={query} onChange={e => setQuery(e.target.value)} /></div>
-      <div className={css.filters}>
+      <div className={css.toolbar}><input ref={searchInput} type="search" aria-label="搜索会话" placeholder="搜索会话" value={query} onChange={e => setQuery(e.target.value)} /><Button size="sm" variant="ghost" aria-label="列表显示选项" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}>☷</Button></div>
+      {filtersOpen && <div className={css.filters}>
         <select aria-label="会话分组" value={view.groupBy} onChange={e => props.actions.setGroupBy(e.target.value as 'flat' | 'workspace' | 'workspace-tree')}><option value="workspace">按工作区</option><option value="workspace-tree">工作区目录</option><option value="flat">全部会话</option></select>
         <select aria-label="会话排序" value={view.orderBy} onChange={e => props.actions.setOrderBy(e.target.value as 'manual' | 'updated', orders as Record<string, SessionId[]>)}><option value="updated">最近更新</option><option value="manual">手动排序</option></select>
         <select aria-label="归档筛选" value={view.archivedFilter ?? 'default'} onChange={e => props.actions.setArchivedFilter(e.target.value as 'default' | 'show' | 'only')}><option value="default">未归档</option><option value="show">包含归档</option><option value="only">已归档</option></select>
-      </div>
+      </div>}
       {normalizedQuery && (search.query !== normalizedQuery || search.status === 'loading') && <p role="status" className={css.empty}>搜索中…</p>}
       {normalizedQuery && search.query === normalizedQuery && search.status === 'error' && <p role="alert" title={search.error} className={css.empty}>全文搜索失败，当前仅显示标题匹配</p>}
       {normalizedQuery && search.query === normalizedQuery && search.hasMore && <p className={css.empty}>结果较多，请缩小搜索范围</p>}
@@ -165,14 +181,19 @@ export function registerSessionTree(ctx: Context, controller: SidecarController)
       <MenuItemButton onSelect={() => run(() => archived ? ctx.uiWorkspace.unarchiveSession(id) : ctx.uiWorkspace.archiveSession(id))}>{archived ? '取消归档' : '归档'}</MenuItemButton>
     </Menu>
   }
+  function Toggle({ wide }: PropsRuntime<'sidebar.footer.action'>) {
+    const active = useSyncExternalStore(subscribe, () => enabled)
+    const label = active ? '切换到原生列表' : '切换到侧问层级列表'
+    return <Button size="sm" variant="ghost" title={label} aria-label={label} onClick={() => setEnabled(!active)}>{wide ? active ? '原生列表' : '侧问层级列表' : '☷'}</Button>
+  }
   function sync() {
     if (syncing) return
     syncing = true
     try {
       const native = ctx.slots.entries('sidebar.workspaces').find(e => e.component !== Tree)
-      if (native === original && !!stopTree === !!native) return
+      if (native === original && !!stopTree === (enabled && !!native)) return
       stopTree?.(); stopTree = undefined; original = native
-      if (native?.store && native.inject) {
+      if (enabled && native?.store && native.inject) {
         // The public slot ledger exposes the existing store and action factory.
         // No private module imports or duplicate native child-slot declarations.
         stopTree = ctx.slots.register({ name: 'sidebar.workspaces', priority: -10, store: native.store, inject: native.inject, locale: native.locale } as never, Tree)
@@ -180,8 +201,9 @@ export function registerSessionTree(ctx: Context, controller: SidecarController)
     } finally { syncing = false }
   }
   const stopWatch = ctx.slots.subscribe('sidebar.workspaces', sync)
+  const stopToggle = ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'sidecar-tree-mode' }, Toggle))
   sync()
-  return () => { stopWatch(); stopTree?.() }
+  return () => { stopWatch(); stopToggle(); stopTree?.(); listeners.clear() }
 }
 
 /** Move one sibling while retaining hidden/archived members in the native account. */
